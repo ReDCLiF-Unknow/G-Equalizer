@@ -8,6 +8,7 @@ public class AppSettings
     public bool EqEnabled { get; set; } = true;
     public string ActivePreset { get; set; } = "Flat";
     public bool LaunchWithWindows { get; set; } = false;
+    public string DefaultPreset { get; set; } = "Flat";
     public float[]? LastCalibration { get; set; }
 
     private static readonly string SettingsDir =

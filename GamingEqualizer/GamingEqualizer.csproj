@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>GamingEqualizer</AssemblyName>
     <RootNamespace>GamingEqualizer</RootNamespace>
-    <ApplicationIcon>Assets\tray-icon-on.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +21,7 @@
   <ItemGroup>
     <Resource Include="Assets\tray-icon-on.ico" />
     <Resource Include="Assets\tray-icon-off.ico" />
+    <Resource Include="Assets\app-icon.ico" />
   </ItemGroup>
 
   <ItemGroup>

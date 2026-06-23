@@ -201,31 +201,46 @@ public partial class MainWindow : Window
             ApplyCurrentGains();
     }
 
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var win = new SettingsWindow(_settings, _presetManager) { Owner = this };
+        if (win.ShowDialog() == true && win.NewCalibrationGains != null)
+        {
+            ApplyCalibrationGains(win.NewCalibrationGains);
+        }
+    }
+
     private void CalibrationButton_Click(object sender, RoutedEventArgs e)
     {
         var wizard = new CalibrationWizard(_settings) { Owner = this };
         if (wizard.ShowDialog() == true && wizard.ResultGains != null)
         {
             _settings.LastCalibration = wizard.ResultGains;
-            _suppressSliderChange = true;
-            for (int i = 0; i < 10 && i < wizard.ResultGains.Length; i++)
-            {
-                _sliders[i].Value = wizard.ResultGains[i];
-                _gainLabels[i].Text = wizard.ResultGains[i].ToString("F1");
-                _settings.BandGains[i] = wizard.ResultGains[i];
-            }
-            _suppressSliderChange = false;
-            _settings.ActivePreset = "";
-
-            _suppressPresetChange = true;
-            PresetCombo.SelectedIndex = -1;
-            _suppressPresetChange = false;
-
             _settings.Save();
-            SetVizTargets();
-            if (_settings.EqEnabled)
-                ApplyCurrentGains();
+            ApplyCalibrationGains(wizard.ResultGains);
         }
+    }
+
+    private void ApplyCalibrationGains(float[] gains)
+    {
+        _suppressSliderChange = true;
+        for (int i = 0; i < 10 && i < gains.Length; i++)
+        {
+            _sliders[i].Value = gains[i];
+            _gainLabels[i].Text = gains[i].ToString("F1");
+            _settings.BandGains[i] = gains[i];
+        }
+        _suppressSliderChange = false;
+        _settings.ActivePreset = "";
+
+        _suppressPresetChange = true;
+        PresetCombo.SelectedIndex = -1;
+        _suppressPresetChange = false;
+
+        _settings.Save();
+        SetVizTargets();
+        if (_settings.EqEnabled)
+            ApplyCurrentGains();
     }
 
     private void ApplyCurrentGains()
