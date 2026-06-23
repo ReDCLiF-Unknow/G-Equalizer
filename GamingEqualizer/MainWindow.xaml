@@ -1,0 +1,122 @@
+<Window x:Class="GamingEqualizer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="G Equalizer"
+        Width="780" Height="520"
+        MinWidth="700" MinHeight="480"
+        ResizeMode="CanMinimize"
+        Background="{StaticResource BackgroundBrush}"
+        Foreground="{StaticResource TextBrush}"
+        WindowStyle="SingleBorderWindow"
+        Closing="Window_Closing">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Title + EQ on/off -->
+            <RowDefinition Height="Auto"/>
+            <!-- Error banner -->
+            <RowDefinition Height="*"/>
+            <!-- EQ sliders -->
+            <RowDefinition Height="Auto"/>
+            <!-- Preset row -->
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="G EQUALIZER"
+                           FontSize="22" FontWeight="Bold"
+                           Foreground="{StaticResource AccentBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusLabel"
+                           Text=" · ON"
+                           FontSize="14"
+                           Foreground="{StaticResource AccentBrush}"
+                           VerticalAlignment="Center"
+                           Margin="4,0,0,0"/>
+            </StackPanel>
+
+            <Button x:Name="ToggleButton"
+                    Grid.Column="1"
+                    Content="DISABLE EQ"
+                    Width="120"
+                    Click="ToggleButton_Click"/>
+        </Grid>
+
+        <!-- Error banner (hidden by default) -->
+        <Border x:Name="ErrorBanner"
+                Grid.Row="1"
+                Background="{StaticResource ErrorBrush}"
+                CornerRadius="4"
+                Padding="10,6"
+                Margin="0,0,0,10"
+                Visibility="Collapsed">
+            <TextBlock x:Name="ErrorText"
+                       Foreground="White"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- EQ Sliders area -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                CornerRadius="8"
+                Padding="16,12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <!-- dB labels -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Freq labels -->
+                </Grid.RowDefinitions>
+
+                <!-- Sliders -->
+                <UniformGrid x:Name="SliderGrid"
+                             Grid.Row="0"
+                             Rows="1" Columns="10"
+                             HorizontalAlignment="Stretch"/>
+
+                <!-- dB value labels -->
+                <UniformGrid x:Name="GainLabels"
+                             Grid.Row="1"
+                             Rows="1" Columns="10"
+                             Margin="0,4,0,0"/>
+
+                <!-- Frequency labels -->
+                <UniformGrid x:Name="FreqLabels"
+                             Grid.Row="2"
+                             Rows="1" Columns="10"
+                             Margin="0,4,0,0"/>
+            </Grid>
+        </Border>
+
+        <!-- Preset row -->
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="PRESET" FontSize="12"
+                           Foreground="{StaticResource TextDimBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <ComboBox x:Name="PresetCombo"
+                          Width="160"
+                          SelectionChanged="PresetCombo_SelectionChanged"/>
+            </StackPanel>
+
+            <Button Grid.Column="2"
+                    Content="Hearing Calibration"
+                    Click="CalibrationButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>

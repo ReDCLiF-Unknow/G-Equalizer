@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+
+# NuGet
+packages/
+*.nupkg
+
+# Publish
+publish/
+
+# Logs (generated at runtime, not tracked)
+*.log
