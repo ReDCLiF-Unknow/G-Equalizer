@@ -3,7 +3,7 @@
 **Date:** 2026-06-23
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer
 **Branch:** main
-**Last commit:** 78920d6
+**Last commit:** 02044e4
 
 ---
 
@@ -23,14 +23,14 @@ Key features:
 
 ## Current Status
 
-**Phase 1 complete. Phase 2 and 3 not yet started.**
+**Phase 1 and 2 complete. Phase 3 and 4 not yet started.**
 
-The app builds and runs against .NET 10. The UI is functional — sliders, toggle, preset combo, error banner, tray icon, hide-to-tray on close all work. When EqualizerAPO is not installed, the app correctly shows the error banner and disables EQ controls.
+The app builds and runs against .NET 10. The UI is fully functional — sliders, toggle, preset combo, animated frequency visualizer, error banner, tray icon, hide-to-tray on close all work. When EqualizerAPO is not installed, the app correctly shows the error banner and disables EQ controls.
 
 | Phase | Status |
 |---|---|
 | Phase 1: Project setup, EQ writer, tray, settings | **Done** |
-| Phase 2: Preset switching UI + frequency visualizer | Not started |
+| Phase 2: Preset switching UI + frequency visualizer | **Done** |
 | Phase 3: Hearing calibration wizard (NAudio) | Stub exists, not wired |
 | Phase 4: Settings screen + installer | Not started |
 
@@ -44,7 +44,7 @@ GamingEqualizer/
   app.manifest                  asInvoker (dev); change to requireAdministrator for release
   GlobalUsings.cs               Resolves WPF vs WinForms namespace conflicts
   App.xaml / App.xaml.cs        App entry, dark theme resource dict, tray init
-  MainWindow.xaml / .cs         10-band EQ UI, preset combo, toggle, error banner
+  MainWindow.xaml / .cs         10-band EQ UI, preset combo, toggle, error banner, animated visualizer
   CalibrationWizard.xaml / .cs  Hearing calibration wizard stub (Phase 3)
   TrayController.cs             NotifyIcon, Toggle/Open/Quit, hide-to-tray
   EQConfigWriter.cs             Apply(bands) / Bypass(), retry + Include fallback
@@ -70,11 +70,6 @@ GamingEqualizer/
 
 ## Where to Start Next
 
-**Phase 2** — Preset switching + frequency visualizer:
-
-7. Preset JSON files are already in `Presets/` and `PresetManager.cs` already loads them. Wire up the `PresetCombo` dropdown in `MainWindow.xaml.cs` — it already has a `PresetCombo_SelectionChanged` handler but the combo has no items populated from `PresetManager` on load. Fix `PopulatePresetCombo()` to call `_presetManager.Load()` first and populate items.
-8. Add the animated frequency visualizer — a WPF `Canvas` with 10 bars (one per band) that animate to current gain values on every slider/preset change. Use a `DispatcherTimer` for smooth transitions. Add this to `MainWindow.xaml` below the slider grid.
-
 **Phase 3** — Hearing calibration (the wizard stub already exists in `CalibrationWizard.xaml/.cs`):
 - The NAudio sine tone playback, threshold slider, and gain algorithm are already implemented. Test and verify the full wizard flow end-to-end.
 
@@ -91,7 +86,6 @@ GamingEqualizer/
 |---|---|
 | `app.manifest` is `asInvoker` | Changed for dev convenience. Must be `requireAdministrator` in release so the app can write to the EqualizerAPO config dir. |
 | Tray icons are placeholders | `tray-icon-on.ico` and `tray-icon-off.ico` in `Assets/` are generated 16×16 placeholder icons. Replace with real art before release. |
-| `PresetCombo` not populated on load | `PopulatePresetCombo()` is called before `_presetManager.Load()`. Reorder or call Load inside. |
 
 ---
 
