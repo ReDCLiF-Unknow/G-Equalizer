@@ -74,6 +74,8 @@
                     <!-- dB labels -->
                     <RowDefinition Height="Auto"/>
                     <!-- Freq labels -->
+                    <RowDefinition Height="80"/>
+                    <!-- Visualizer -->
                 </Grid.RowDefinitions>
 
                 <!-- Sliders -->
@@ -93,6 +95,13 @@
                              Grid.Row="2"
                              Rows="1" Columns="10"
                              Margin="0,4,0,0"/>
+
+                <!-- Frequency visualizer -->
+                <Canvas x:Name="VisualizerCanvas"
+                        Grid.Row="3"
+                        Margin="0,8,0,0"
+                        Background="Transparent"
+                        SizeChanged="VisualizerCanvas_SizeChanged"/>
             </Grid>
         </Border>
 

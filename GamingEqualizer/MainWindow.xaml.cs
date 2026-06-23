@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
+using WpfRect = System.Windows.Shapes.Rectangle;
 using GamingEqualizer.Models;
 
 namespace GamingEqualizer;
@@ -20,6 +22,12 @@ public partial class MainWindow : Window
     private bool _suppressPresetChange = false;
     private bool _suppressSliderChange = false;
 
+    // Visualizer
+    private readonly WpfRect[] _vizBars = new WpfRect[10];
+    private readonly double[] _vizCurrent = new double[10];
+    private readonly double[] _vizTarget = new double[10];
+    private DispatcherTimer? _vizTimer;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -30,6 +38,7 @@ public partial class MainWindow : Window
         BuildFreqLabels();
         PopulatePresetCombo();
         RestoreState();
+        BuildVisualizer();
 
         if (!EQConfigWriter.IsEqualizerApoInstalled())
             ShowEqApoMissingBanner();
@@ -137,6 +146,7 @@ public partial class MainWindow : Window
         _settings.ActivePreset = "";
 
         _settings.Save();
+        SetVizTargets();
         if (_settings.EqEnabled)
             ApplyCurrentGains();
     }
@@ -185,6 +195,7 @@ public partial class MainWindow : Window
 
         _settings.ActivePreset = presetName;
         _settings.Save();
+        SetVizTargets();
 
         if (_settings.EqEnabled)
             ApplyCurrentGains();
@@ -211,6 +222,7 @@ public partial class MainWindow : Window
             _suppressPresetChange = false;
 
             _settings.Save();
+            SetVizTargets();
             if (_settings.EqEnabled)
                 ApplyCurrentGains();
         }
@@ -263,5 +275,111 @@ public partial class MainWindow : Window
         // Hide to tray instead of closing
         e.Cancel = true;
         Hide();
+    }
+
+    // ── Visualizer ────────────────────────────────────────────────────────────
+
+    private void BuildVisualizer()
+    {
+        var accent = (SolidColorBrush)Application.Current.Resources["AccentBrush"];
+        var dimAccent = new SolidColorBrush(System.Windows.Media.Color.FromArgb(80, accent.Color.R, accent.Color.G, accent.Color.B));
+
+        for (int i = 0; i < 10; i++)
+        {
+            _vizBars[i] = new WpfRect
+            {
+                Fill = dimAccent,
+                RadiusX = 2,
+                RadiusY = 2
+            };
+            VisualizerCanvas.Children.Add(_vizBars[i]);
+        }
+
+        // Center line
+        var centerLine = new WpfRect
+        {
+            Fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255)),
+            Height = 1
+        };
+        VisualizerCanvas.Children.Add(centerLine);
+        Canvas.SetTop(centerLine, 0);
+        Canvas.SetLeft(centerLine, 0);
+        centerLine.Width = double.NaN; // will be set in SizeChanged
+
+        // Store center line for SizeChanged
+        _vizCenterLine = centerLine;
+
+        // Seed current values from settings so first frame isn't a snap from 0
+        for (int i = 0; i < 10; i++)
+        {
+            _vizCurrent[i] = _settings.BandGains[i];
+            _vizTarget[i] = _settings.BandGains[i];
+        }
+
+        _vizTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _vizTimer.Tick += VizTick;
+        _vizTimer.Start();
+    }
+
+    private WpfRect? _vizCenterLine;
+
+    private void VisualizerCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
+        => PositionAllVizBars();
+
+    private void VizTick(object? sender, EventArgs e)
+    {
+        bool dirty = false;
+        for (int i = 0; i < 10; i++)
+        {
+            double diff = _vizTarget[i] - _vizCurrent[i];
+            if (Math.Abs(diff) > 0.01)
+            {
+                _vizCurrent[i] += diff * 0.18;
+                dirty = true;
+            }
+            else
+            {
+                _vizCurrent[i] = _vizTarget[i];
+            }
+        }
+        if (dirty) PositionAllVizBars();
+    }
+
+    private void PositionAllVizBars()
+    {
+        double w = VisualizerCanvas.ActualWidth;
+        double h = VisualizerCanvas.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        double midY = h / 2.0;
+        double maxBarH = midY - 4;
+        double barW = Math.Max(4, w / 10.0 - 4);
+
+        for (int i = 0; i < 10; i++)
+        {
+            double gain = _vizCurrent[i];
+            double barH = Math.Abs(gain) / 12.0 * maxBarH;
+            barH = Math.Max(1, barH);
+
+            double x = i * (w / 10.0) + (w / 10.0 - barW) / 2.0;
+            double y = gain >= 0 ? midY - barH : midY;
+
+            _vizBars[i].Width = barW;
+            _vizBars[i].Height = barH;
+            Canvas.SetLeft(_vizBars[i], x);
+            Canvas.SetTop(_vizBars[i], y);
+        }
+
+        if (_vizCenterLine != null)
+        {
+            _vizCenterLine.Width = w;
+            Canvas.SetTop(_vizCenterLine, midY);
+        }
+    }
+
+    private void SetVizTargets()
+    {
+        for (int i = 0; i < 10; i++)
+            _vizTarget[i] = _settings.BandGains[i];
     }
 }
