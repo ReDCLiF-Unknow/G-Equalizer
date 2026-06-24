@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Newtonsoft.Json;
@@ -79,6 +80,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        try
+        {
+            var uri = new Uri("pack://application:,,,/Assets/app-icon.ico", UriKind.Absolute);
+            Icon = BitmapFrame.Create(uri);
+        }
+        catch { }
         _settings = AppSettings.Load();
         _presetManager.Load();
 
@@ -201,6 +208,7 @@ public partial class MainWindow : Window
                 Style              = chipStyle
             };
             slider.ValueChanged += (_, _) => OnSliderChanged(idx);
+            slider.MouseDoubleClick += (_, _) => { slider.Value = 0; };
             _sliders[idx] = slider;
 
             // Overlay grid
@@ -362,6 +370,7 @@ public partial class MainWindow : Window
 
         SetEqState(_settings.EqEnabled, writeConfig: false);
         SetActiveChip(_settings.ActivePreset);
+        RefreshBoostButton();
 
         // Update all slider visuals after layout is ready
         Dispatcher.InvokeAsync(() =>
@@ -401,6 +410,28 @@ public partial class MainWindow : Window
         _settings.Save();
     }
 
+    private void BoostButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.BoostEnabled = !_settings.BoostEnabled;
+        _settings.Save();
+        RefreshBoostButton();
+        if (_settings.EqEnabled) ApplyCurrentGains();
+    }
+
+    private void RefreshBoostButton()
+    {
+        if (_settings.BoostEnabled)
+        {
+            BoostButton.Content = $"⚡ +{_settings.BoostDb:0}dB ON";
+            BoostButton.Style   = (Style)Application.Current.Resources["PrimaryButtonStyle"];
+        }
+        else
+        {
+            BoostButton.Content = "⚡ BOOST";
+            BoostButton.Style   = null;
+        }
+    }
+
     private void SetEqState(bool enabled, bool writeConfig)
     {
         _settings.EqEnabled = enabled;
@@ -432,10 +463,16 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var win = new SettingsWindow(_settings, _presetManager) { Owner = this };
+        var win = new SettingsWindow(_settings, _presetManager, onBoostChanged: () =>
+        {
+            RefreshBoostButton();
+            if (_settings.EqEnabled) ApplyCurrentGains();
+        }) { Owner = this };
         win.ShowDialog();
         if (win.NewCalibrationGains != null) ApplyCalibrationGains(win.NewCalibrationGains);
         if (win.ImportedPreset != null)      HandleImportedPreset(win.ImportedPreset);
+        RefreshBoostButton();
+        if (_settings.EqEnabled) ApplyCurrentGains();
     }
 
     private void LiveModeButton_Click(object sender, RoutedEventArgs e)
@@ -488,11 +525,11 @@ public partial class MainWindow : Window
                 float[] avg = _settings.LastCalibration ?? _settings.BandGains;
                 float[] left  = BlendWithPreset(_settings.BandGains, avg, _settings.LastCalibrationLeft);
                 float[] right = BlendWithPreset(_settings.BandGains, avg, _settings.LastCalibrationRight);
-                _eqWriter.ApplyPerEar(left, right);
+                _eqWriter.ApplyPerEar(left, right, _settings.BoostEnabled ? _settings.BoostDb : 0f);
             }
             else
             {
-                _eqWriter.Apply(_settings.BandGains);
+                _eqWriter.Apply(_settings.BandGains, _settings.BoostEnabled ? _settings.BoostDb : 0f);
             }
             HideErrorBanner();
         }
@@ -758,6 +795,7 @@ public partial class MainWindow : Window
         _hwndSource = HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
         _hwndSource?.AddHook(WndProc);
         if (_hwndSource != null) HotkeyManager.Register(_hwndSource);
+        DwmHelper.ApplyDarkTitlebar(this);
     }
 
     protected override void OnClosed(EventArgs e)

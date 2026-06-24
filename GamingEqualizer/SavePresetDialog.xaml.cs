@@ -10,6 +10,12 @@ public partial class SavePresetDialog : Window
 
     public string? PresetName { get; private set; }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmHelper.ApplyDarkTitlebar(this);
+    }
+
     public SavePresetDialog(IEnumerable<string> existingNames)
     {
         InitializeComponent();

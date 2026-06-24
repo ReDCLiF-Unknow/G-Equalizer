@@ -14,6 +14,12 @@ public partial class OnboardingWizard : Window
     private UIElement[] _pages = null!;
     private Ellipse[]   _dots  = null!;
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmHelper.ApplyDarkTitlebar(this);
+    }
+
     public OnboardingWizard()
     {
         InitializeComponent();

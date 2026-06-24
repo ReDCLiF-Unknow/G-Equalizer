@@ -80,6 +80,11 @@
                         <Button Content="⚙ Settings"
                                 Margin="0,0,6,0"
                                 Click="SettingsButton_Click"/>
+                        <Button x:Name="BoostButton"
+                                Content="⚡ BOOST"
+                                Margin="0,0,6,0"
+                                Width="90"
+                                Click="BoostButton_Click"/>
                         <Button x:Name="ToggleButton"
                                 Content="■ DISABLE"
                                 Style="{StaticResource DangerButtonStyle}"

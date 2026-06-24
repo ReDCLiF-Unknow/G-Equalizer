@@ -30,6 +30,12 @@ public partial class CalibrationWizard : Window
     // Average — kept for slider display in MainWindow
     public float[]? ResultGains      { get; private set; }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmHelper.ApplyDarkTitlebar(this);
+    }
+
     public CalibrationWizard(AppSettings settings)
     {
         InitializeComponent();

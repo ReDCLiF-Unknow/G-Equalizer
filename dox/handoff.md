@@ -11,7 +11,7 @@
 A Windows desktop app (C# / WPF / .NET 10) that applies system-wide audio equalization for PC gamers. It acts as a frontend controller for EqualizerAPO — it reads and writes EqualizerAPO's config file to change the EQ in real time without touching audio drivers manually.
 
 Key features:
-- 10-band EQ (32Hz–16kHz, ±12 dB per band) with per-band tooltips explaining each frequency range
+- 10-band EQ (32Hz–16kHz, ±12 dB per band) with per-band tooltips; double-click any slider to reset to 0 dB
 - On/off toggle from the app or system tray
 - Gaming presets: FPS, RPG, Cinematic, Music, Flat + custom presets (save/import/export)
 - Per-ear hearing calibration wizard (left/right separately via NAudio panning + sine tones)
@@ -19,13 +19,14 @@ Key features:
 - Mini / compact always-on-top widget (500×58 px)
 - Global hotkeys: Ctrl+Alt+E (toggle), Ctrl+Alt+P (cycle preset)
 - First-run onboarding walkthrough (4-step modal)
+- Sound Boost: 0–20 dB preamp boost, toggle button in titlebar + slider in Settings, real-time apply
 - Persists all state across restarts
 
 ---
 
 ## Current Status
 
-**v2 shipped.** All features complete. Builds clean (0 errors, 0 warnings).
+**v2 shipped + post-ship polish applied.** Builds clean (0 errors, 0 warnings).
 
 | Phase | Status |
 |---|---|
@@ -37,6 +38,7 @@ Key features:
 | v2: Core visual redesign | **Done** |
 | v2: Feature additions | **Done** |
 | v2: Release build + distribution artifacts | **Done** |
+| Post-ship: Custom icon, titlebar color, sound boost, UX polish | **Done** |
 
 ---
 
@@ -47,32 +49,34 @@ GamingEqualizer/
   GamingEqualizer.csproj        .NET 10, NAudio + Newtonsoft.Json
   app.manifest                  requireAdministrator (release); switch to asInvoker for dev
   GlobalUsings.cs               Resolves WPF vs WinForms namespace conflicts
+  DwmHelper.cs                  Static helper — ApplyDarkTitlebar(window) via DwmSetWindowAttribute
   App.xaml / App.xaml.cs        App entry, dark theme resource dict, tray init, first-run onboarding trigger
-  MainWindow.xaml / .cs         10-band EQ UI, preset chips, toggle, visualizer, live mode, mini mode, band tooltips
+  MainWindow.xaml / .cs         10-band EQ UI, preset chips, toggle, visualizer, live mode, mini mode, band tooltips, boost button
   MiniWindow.xaml / .cs         Always-on-top compact widget (500×58px, draggable)
   OnboardingWizard.xaml / .cs   4-step first-run walkthrough (Welcome / Presets / Hotkeys / Calibration)
   SavePresetDialog.xaml / .cs   Name-input dialog for saving custom presets
   CalibrationWizard.xaml / .cs  Per-ear hearing calibration: 14 steps (7 left + 7 right), panned sine tones
-  SettingsWindow.xaml / .cs     Settings: launch-with-Windows, default preset, re-calibrate, import/export
+  SettingsWindow.xaml / .cs     Settings: launch-with-Windows, default preset, re-calibrate, import/export, boost slider
   HotkeyManager.cs              RegisterHotKey/UnregisterHotKey P/Invoke wrapper
   AudioSpectrumAnalyzer.cs      WasapiLoopbackCapture + FFT → 80-bar spectrum data
   TrayController.cs             NotifyIcon, Toggle/Open/Quit, hide-to-tray
-  EQConfigWriter.cs             Apply(bands) / ApplyPerEar(left, right) / Bypass(), retry + Include fallback
+  EQConfigWriter.cs             Apply(bands, boostDb) / ApplyPerEar(left, right, boostDb) / Bypass(), retry + Include fallback
   PresetManager.cs              Loads Presets/*.json, Reload(), falls back to Flat
   Logger.cs                     Appends to %AppData%\GamingEqualizer\error.log
   Models/
-    AppSettings.cs              Load/save JSON — bands, preset, cal (left/right/avg), onboarding flag
+    AppSettings.cs              Load/save JSON — bands, preset, cal (left/right/avg), onboarding flag, BoostDb, BoostEnabled
     Preset.cs
     HearingProfile.cs
   Presets/
     FPS.json / RPG.json / Cinematic.json / Flat.json / Music.json
   Assets/
-    app-icon.ico                Multi-size (16/32/48/256px) — ApplicationIcon in .csproj
-    tray-icon-on.ico            Full-color version of app icon for tray (EQ on)
-    tray-icon-off.ico           Desaturated/dimmed version for tray (EQ off)
+    app-icon.ico                Custom shield + EQ bars design, purple→pink, multi-size (16/32/48/256px)
+    app-icon-backup.ico         Original placeholder icon (kept for reference)
+    tray-icon-on.ico            Shield icon, full color — tray when EQ is active
+    tray-icon-off.ico           Shield icon, desaturated gray — tray when EQ is disabled
 
 %AppData%\GamingEqualizer\  (runtime, not in repo)
-  AppSettings.json              Includes LastCalibrationLeft / LastCalibrationRight (per-ear) + HasCompletedOnboarding
+  AppSettings.json              Includes LastCalibrationLeft / LastCalibrationRight (per-ear) + HasCompletedOnboarding + BoostDb + BoostEnabled
   HearingProfile.json
   error.log
 ```
@@ -95,6 +99,8 @@ All in `dist/`:
 dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ..\dist\app
 ```
 
+> Note: `dist/` artifacts are from v2. Re-publish to pick up post-ship changes (custom icon, boost, titlebar).
+
 ---
 
 ## Known Issues / Things to Fix
@@ -104,8 +110,10 @@ None. All previously known issues are resolved.
 | Was | Resolution |
 |---|---|
 | `app.manifest` was `asInvoker` | Now `requireAdministrator` in release build |
-| Tray icons were placeholders | Replaced with real icons generated from the app logo PNG |
-| `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Removed XAML `Icon=` attribute; exe icon comes from `<ApplicationIcon>` in .csproj |
+| Tray icons were placeholders | Replaced with custom shield design matching app palette |
+| `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Set programmatically via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
+| White Windows titlebar on all windows | Fixed via `DwmSetWindowAttribute(DWMWA_CAPTION_COLOR)` in `DwmHelper.ApplyDarkTitlebar()` — applied to all windows |
+| Tray icons not appearing (showing generic icon) | Changed from `<Resource>` to `<Content CopyToOutputDirectory>` in .csproj so they're on disk at runtime |
 
 ---
 
@@ -126,7 +134,12 @@ None. All previously known issues are resolved.
 - **EQ filter spec:** Peaking EQ, Q = 1.41, ±12 dB range per band.
 - **Per-ear calibration:** Each ear tested separately (7 frequencies × 2 ears = 14 steps). Signal is panned hard left/right via `PanningSampleProvider(monoSignalGenerator)`. Results stored as `LastCalibrationLeft[10]` + `LastCalibrationRight[10]`. Average stored in `LastCalibration[10]` for slider display. `EQConfigWriter.ApplyPerEar` writes `Channel: L` / `Channel: R` / `Channel: ALL` blocks. When the user subsequently switches presets, `BlendWithPreset` adds the per-ear deviation `(calSide[i] - calAvg[i])` on top of the preset gains — so calibration persists as a transparent hearing-correction layer across preset changes.
 - **Onboarding:** `AppSettings.HasCompletedOnboarding` (default `false`). `App.xaml.cs` shows `OnboardingWizard` after `MainWindow` is shown on first run. If the user opts in to calibration on the final step, `MainWindow.OpenCalibrationWizard()` is called immediately after.
-- **State storage:** `%AppData%\GamingEqualizer\AppSettings.json` — active preset, on/off state, band gains, launch-with-Windows flag, per-ear calibration, onboarding flag.
+- **State storage:** `%AppData%\GamingEqualizer\AppSettings.json` — active preset, on/off state, band gains, launch-with-Windows flag, per-ear calibration, onboarding flag, `BoostDb`, `BoostEnabled`.
+- **Sound Boost:** `BoostDb` (0–20 dB, default 0) folds into the EqualizerAPO `Preamp:` line as `Preamp: (-6 + boostDb) dB`. The `-6 dB` base headroom is always present to prevent clipping. `EQConfigWriter.Apply` and `ApplyPerEar` both accept `boostDb = 0f` as a default. `BoostEnabled` gates whether boost is applied — toggle button in titlebar, checkbox + slider in Settings. Settings notifies MainWindow via `onBoostChanged` callback (passed at construction) so EQ re-applies in real time while the slider is dragged.
+- **Titlebar color:** All windows call `DwmHelper.ApplyDarkTitlebar(this)` in `OnSourceInitialized`. The color `#1a0533` is stored as COLORREF `0x00330519` in `DwmHelper.cs`. Windows 11 only — on older Windows it silently no-ops.
+- **App icon:** Set programmatically in `MainWindow` constructor via `BitmapFrame.Create("pack://application:,,,/Assets/app-icon.ico")` — avoids the .NET 10 XAML crash. `<ApplicationIcon>` in .csproj handles the exe/taskbar icon. Tray icons loaded from file path (must be `<Content>` not `<Resource>` in .csproj).
+- **Custom icon design:** Shield shape with 7 EQ bars, purple→pink gradient (`#7c3aed → #f472b6`), dark background `#16052E`. Generated with PowerShell + `System.Drawing` — see the generation script in the session history if you need to regenerate. `app-icon-backup.ico` is the original.
+- **Slider double-click reset:** `slider.MouseDoubleClick += (_, _) => { slider.Value = 0; }` wired in `BuildSliders()` for each of the 10 sliders.
 - **Error policy:** Config write failures show an error banner and revert; corrupted JSON files are skipped and logged to `error.log`; NAudio device failure cancels the calibration wizard with a clear message.
 - **WPF + WinForms coexistence:** `UseWindowsForms=true` is needed for `NotifyIcon`. All ambiguities (`Application`, `Orientation`, `HorizontalAlignment`, `OpenFileDialog`, `SaveFileDialog`, `Button`, etc.) are resolved in `GlobalUsings.cs`. File-local aliases (`WpfColor`, `WpfRect`, `WpfEllipse`, `WpfButton`) handle per-file conflicts — do NOT use plain `Color` or `Point` without qualifying the namespace.
 - **Visualizer array size:** `_vizCurrent` and `_vizTarget` are `double[80]` (one per bar). In EQ mode, `SetVizTargets()` interpolates from 10 band gains → 80 bars. In live mode, `AudioSpectrumAnalyzer` writes all 80 directly from FFT. Do not shrink these back to 10.
@@ -144,7 +157,7 @@ None. All previously known issues are resolved.
 | 80-bar animated gradient visualizer | Top of window; EQ-mode ripple animation or live WASAPI FFT |
 | Custom slider visuals | Canvas overlay: colored fill from center + glowing band-colored thumb |
 | Preset chip row | ToggleButtons replacing ComboBox |
-| Titlebar | Logo icon, live status pill, Mini / Settings / Disable buttons |
+| Titlebar | Logo icon, live status pill, Mini / Settings / Boost / Enable buttons |
 | Music preset | V-shaped curve: bass + treble lift |
 | SettingsWindow v2 styling | Matches purple→pink palette |
 | Global hotkeys | Ctrl+Alt+E toggle, Ctrl+Alt+P cycle |
@@ -157,6 +170,17 @@ None. All previously known issues are resolved.
 | Per-ear hearing calibration | 14-step wizard, L/R panning, blended into EQ config |
 | Band tooltips | Hover any slider column to see frequency description |
 | v2 release build | `GEqualizer-Setup-2.0.0.exe` (48 MB) + portable ZIP (66 MB) |
+
+## Post-ship Polish (this session)
+
+| Feature | Notes |
+|---|---|
+| Custom app icon | Shield + 7 EQ bars, purple→pink, generated via PowerShell + System.Drawing. 16/32/48/256px |
+| Custom tray icons | Same shield — on = full color, off = desaturated gray. Changed to `<Content>` so they copy to output dir |
+| Window icon (titlebar + taskbar) | Set via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
+| Dark titlebar on all windows | `DwmHelper.ApplyDarkTitlebar()` applied to MainWindow, SettingsWindow, CalibrationWizard, OnboardingWizard, SavePresetDialog |
+| Sound Boost | ⚡ BOOST toggle in titlebar + 0–20 dB slider in Settings. Folds into EqualizerAPO `Preamp:` line. Real-time apply via callback |
+| Slider double-click reset | Double-click any EQ band slider to snap it back to 0 dB |
 
 ---
 
@@ -175,12 +199,12 @@ Full spec: [v3-concept.md](v3-concept.md)
 
 | Feature | Priority | Complexity | Notes |
 |---|---|---|---|
-| Slider double-click reset + tray tooltip | High | Low | Quality-of-life; no new data model |
-| Calibration reference level warning | High | Low | Add a pre-wizard check tone step |
-| Preset share codes (base64 export/import) | High | Medium | Encode float[10] → ~8-char string |
+| Tray tooltip | High | Low | Show current preset + boost state on hover (e.g. "FPS · Boost +7dB") |
+| Calibration reference level warning | High | Low | Add a pre-wizard check tone step so users set volume correctly first |
+| Preset share codes (base64 export/import) | High | Medium | Encode float[10] → short base64 string for copy/paste sharing |
 | AutoEQ headphone correction import | Medium | Medium | Parse parametric `.txt`, blend into EQ output |
 | Calibration re-test individual bands | Medium | Medium | Results screen gets per-band Re-test buttons |
 | Auto-preset switching | Low | High | **Off by default.** User opts in via Settings toggle. Polls foreground process, maps exe → preset. |
 | Visualizer color mode toggle | Low | Low | Solid color or peak-glow alternative to gradient |
 
-**Where to start next session:** pick any High-priority item above — they're all self-contained and don't depend on each other.
+**Where to start next session:** Tray tooltip or preset share codes — both self-contained and high value.

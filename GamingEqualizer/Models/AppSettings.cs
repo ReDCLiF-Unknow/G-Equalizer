@@ -13,6 +13,8 @@ public class AppSettings
     public float[]? LastCalibrationLeft  { get; set; }
     public float[]? LastCalibrationRight { get; set; }
     public bool HasCompletedOnboarding { get; set; } = false;
+    public float BoostDb { get; set; } = 0f;
+    public bool BoostEnabled { get; set; } = false;
 
     private static readonly string SettingsDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GamingEqualizer");

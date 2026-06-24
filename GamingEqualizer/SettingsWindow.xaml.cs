@@ -13,20 +13,31 @@ public partial class SettingsWindow : Window
 
     private readonly AppSettings _settings;
     private readonly PresetManager _presetManager;
+    private readonly Action? _onBoostChanged;
     private bool _suppress = false;
 
     public float[]? NewCalibrationGains { get; private set; }
     public Preset?  ImportedPreset      { get; private set; }
 
-    public SettingsWindow(AppSettings settings, PresetManager presetManager)
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        DwmHelper.ApplyDarkTitlebar(this);
+    }
+
+    public SettingsWindow(AppSettings settings, PresetManager presetManager, Action? onBoostChanged = null)
     {
         InitializeComponent();
         _settings = settings;
         _presetManager = presetManager;
+        _onBoostChanged = onBoostChanged;
 
         _suppress = true;
         LaunchWithWindowsCheck.IsChecked = IsStartupRegistered();
         PopulateDefaultPresetCombo();
+        BoostEnabledCheck.IsChecked = _settings.BoostEnabled;
+        BoostSlider.Value = _settings.BoostDb;
+        BoostLabel.Text = $"+{_settings.BoostDb:0} dB";
         _suppress = false;
     }
 
@@ -94,6 +105,23 @@ public partial class SettingsWindow : Window
             DialogResult = true;
             Close();
         }
+    }
+
+    private void Boost_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppress) return;
+        _settings.BoostEnabled = BoostEnabledCheck.IsChecked == true;
+        _settings.Save();
+        _onBoostChanged?.Invoke();
+    }
+
+    private void BoostSlider_ValueChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppress) return;
+        _settings.BoostDb = (float)BoostSlider.Value;
+        BoostLabel.Text = $"+{_settings.BoostDb:0} dB";
+        _settings.Save();
+        _onBoostChanged?.Invoke();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

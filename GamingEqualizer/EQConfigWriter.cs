@@ -16,15 +16,15 @@ public class EQConfigWriter
 
     public static bool IsEqualizerApoInstalled() => Directory.Exists(@"C:\Program Files\EqualizerAPO\");
 
-    public void Apply(float[] bands)
+    public void Apply(float[] bands, float boostDb = 0f)
     {
-        var lines = BuildConfig(bands);
+        var lines = BuildConfig(bands, boostDb);
         WriteWithFallback(lines);
     }
 
-    public void ApplyPerEar(float[] leftBands, float[] rightBands)
+    public void ApplyPerEar(float[] leftBands, float[] rightBands, float boostDb = 0f)
     {
-        var lines = BuildPerEarConfig(leftBands, rightBands);
+        var lines = BuildPerEarConfig(leftBands, rightBands, boostDb);
         WriteWithFallback(lines);
     }
 
@@ -34,9 +34,10 @@ public class EQConfigWriter
         WriteWithFallback(lines);
     }
 
-    private string[] BuildPerEarConfig(float[] left, float[] right)
+    private string[] BuildPerEarConfig(float[] left, float[] right, float boostDb = 0f)
     {
-        var lines = new List<string> { "Preamp: -6 dB" };
+        float preamp = -6f + Math.Clamp(boostDb, 0f, 20f);
+        var lines = new List<string> { $"Preamp: {preamp:+0.#;-0.#;0} dB" };
 
         lines.Add("Channel: L");
         for (int i = 0; i < left.Length && i < BandFrequencies.Length; i++)
@@ -56,9 +57,10 @@ public class EQConfigWriter
         return lines.ToArray();
     }
 
-    private string[] BuildConfig(float[] bands)
+    private string[] BuildConfig(float[] bands, float boostDb = 0f)
     {
-        var lines = new List<string> { "Preamp: -6 dB" };
+        float preamp = -6f + Math.Clamp(boostDb, 0f, 20f);
+        var lines = new List<string> { $"Preamp: {preamp:+0.#;-0.#;0} dB" };
         for (int i = 0; i < bands.Length && i < BandFrequencies.Length; i++)
         {
             float gain = Math.Clamp(bands[i], -12f, 12f);
