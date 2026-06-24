@@ -9,7 +9,10 @@ public class AppSettings
     public string ActivePreset { get; set; } = "Flat";
     public bool LaunchWithWindows { get; set; } = false;
     public string DefaultPreset { get; set; } = "Flat";
-    public float[]? LastCalibration { get; set; }
+    public float[]? LastCalibration { get; set; }        // kept for backward compat (average)
+    public float[]? LastCalibrationLeft  { get; set; }
+    public float[]? LastCalibrationRight { get; set; }
+    public bool HasCompletedOnboarding { get; set; } = false;
 
     private static readonly string SettingsDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GamingEqualizer");

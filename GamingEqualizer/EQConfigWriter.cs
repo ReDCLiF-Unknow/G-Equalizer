@@ -22,10 +22,38 @@ public class EQConfigWriter
         WriteWithFallback(lines);
     }
 
+    public void ApplyPerEar(float[] leftBands, float[] rightBands)
+    {
+        var lines = BuildPerEarConfig(leftBands, rightBands);
+        WriteWithFallback(lines);
+    }
+
     public void Bypass()
     {
         var lines = new[] { "Preamp: 0 dB" };
         WriteWithFallback(lines);
+    }
+
+    private string[] BuildPerEarConfig(float[] left, float[] right)
+    {
+        var lines = new List<string> { "Preamp: -6 dB" };
+
+        lines.Add("Channel: L");
+        for (int i = 0; i < left.Length && i < BandFrequencies.Length; i++)
+        {
+            float gain = Math.Clamp(left[i], -12f, 12f);
+            lines.Add($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41");
+        }
+
+        lines.Add("Channel: R");
+        for (int i = 0; i < right.Length && i < BandFrequencies.Length; i++)
+        {
+            float gain = Math.Clamp(right[i], -12f, 12f);
+            lines.Add($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41");
+        }
+
+        lines.Add("Channel: ALL");
+        return lines.ToArray();
     }
 
     private string[] BuildConfig(float[] bands)

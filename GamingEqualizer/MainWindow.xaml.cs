@@ -18,6 +18,20 @@ public partial class MainWindow : Window
 {
     private static readonly string[] BandLabels = { "32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k" };
 
+    private static readonly string[] BandTooltips =
+    {
+        "32 Hz — Sub-bass: deep rumble, explosions, engine vibration",
+        "64 Hz — Bass: kick drum punch, low-end weight",
+        "125 Hz — Upper bass: body of voices and instruments",
+        "250 Hz — Low-mids: warmth; too much causes muddiness",
+        "500 Hz — Mids: presence of voices, melee impact sounds",
+        "1 kHz — Upper-mids: clarity and attack of most game sounds",
+        "2 kHz — Presence: sharpness of dialogue and UI sounds",
+        "4 kHz — High-mids: footsteps, reload clicks, detail cues",
+        "8 kHz — Highs: air and crispness; spatial cues in headphones",
+        "16 kHz — Brilliance: extreme top-end sparkle and hiss"
+    };
+
     // Per-band slider + visual elements
     private readonly Slider[]     _sliders      = new Slider[10];
     private readonly TextBlock[]  _gainLabels   = new TextBlock[10];
@@ -207,7 +221,8 @@ public partial class MainWindow : Window
             var col = new StackPanel
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment   = VerticalAlignment.Center
+                VerticalAlignment   = VerticalAlignment.Center,
+                ToolTip             = BandTooltips[i]
             };
             col.Children.Add(gainLabel);
             col.Children.Add(overlay);
@@ -427,11 +442,16 @@ public partial class MainWindow : Window
         => ToggleLiveMode((WpfButton)sender);
 
     private void CalibrationButton_Click(object sender, RoutedEventArgs e)
+        => OpenCalibrationWizard();
+
+    public void OpenCalibrationWizard()
     {
         var wizard = new CalibrationWizard(_settings) { Owner = this };
         if (wizard.ShowDialog() == true && wizard.ResultGains != null)
         {
-            _settings.LastCalibration = wizard.ResultGains;
+            _settings.LastCalibration      = wizard.ResultGains;
+            _settings.LastCalibrationLeft  = wizard.ResultGainsLeft;
+            _settings.LastCalibrationRight = wizard.ResultGainsRight;
             _settings.Save();
             ApplyCalibrationGains(wizard.ResultGains);
         }
@@ -460,8 +480,32 @@ public partial class MainWindow : Window
 
     private void ApplyCurrentGains()
     {
-        try   { _eqWriter.Apply(_settings.BandGains); HideErrorBanner(); }
+        try
+        {
+            if (_settings.LastCalibrationLeft != null && _settings.LastCalibrationRight != null)
+            {
+                // Blend preset/slider gains with per-ear calibration offsets
+                float[] avg = _settings.LastCalibration ?? _settings.BandGains;
+                float[] left  = BlendWithPreset(_settings.BandGains, avg, _settings.LastCalibrationLeft);
+                float[] right = BlendWithPreset(_settings.BandGains, avg, _settings.LastCalibrationRight);
+                _eqWriter.ApplyPerEar(left, right);
+            }
+            else
+            {
+                _eqWriter.Apply(_settings.BandGains);
+            }
+            HideErrorBanner();
+        }
         catch (Exception ex) { ShowErrorBanner($"Failed to apply EQ: {ex.Message}"); }
+    }
+
+    // Adds the per-ear deviation (calSide - calAvg) on top of the current preset/slider gains.
+    private static float[] BlendWithPreset(float[] preset, float[] calAvg, float[] calSide)
+    {
+        float[] result = new float[10];
+        for (int i = 0; i < 10; i++)
+            result[i] = Math.Clamp(preset[i] + (calSide[i] - calAvg[i]), -12f, 12f);
+        return result;
     }
 
     private void SafeBypass()

@@ -20,7 +20,7 @@ Purple → pink gradient palette (Razer/ROG style). Dark backgrounds (`#07070f` 
 │  │   │   │   │   │   │   │   │   │   │                 │  ← 10-band sliders
 │  32  64  125 250 500 1k  2k  4k  8k  16k               │
 ├─────────────────────────────────────────────────────────┤
-│  PRESET   [ FPS ] [ RPG ] [ Cinematic ] [ Flat ] [Custom]│  ← Chip row
+│  PRESET   [ FPS ] [ RPG ] [ Cinematic ] [ Music ] [ Flat ] [Custom]│  ← Chip row
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -68,7 +68,7 @@ Thumb position formula: `top = 60 - (gain/12 × 55) - 6 px`
 
 ## Preset Chips
 
-Chips: **FPS · RPG · Cinematic · Flat · Custom**
+Chips: **FPS · RPG · Cinematic · Music · Flat · Custom**
 
 | State | Style |
 |---|---|
@@ -110,3 +110,9 @@ Chips: **FPS · RPG · Cinematic · Flat · Custom**
 
 - First-run onboarding / tutorial walkthrough for new users
 - Left/right ear calibration option in the calibration wizard
+- **Global hotkeys** — toggle EQ on/off or cycle presets without opening the app (configurable in Settings)
+- **Custom preset save** — users can dial in their own curve, name it, and save it; "Custom" chip opens a save dialog
+- **Mini / compact mode** — small always-on-top widget showing just the status pill + preset chips for use while gaming
+- **Preset import / export** — share `.json` preset files; import button in Settings, export from right-click on a chip
+- **Live audio visualizer** — bars animate to actual system audio output (WASAPI loopback via NAudio) instead of just the EQ curve
+- **Preset transition animations** — sliders animate smoothly when switching presets instead of snapping
