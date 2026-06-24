@@ -1,6 +1,8 @@
 using Microsoft.Win32;
+using System.IO;
 using System.Windows;
 using GamingEqualizer.Models;
+using Newtonsoft.Json;
 
 namespace GamingEqualizer;
 
@@ -14,6 +16,7 @@ public partial class SettingsWindow : Window
     private bool _suppress = false;
 
     public float[]? NewCalibrationGains { get; private set; }
+    public Preset?  ImportedPreset      { get; private set; }
 
     public SettingsWindow(AppSettings settings, PresetManager presetManager)
     {
@@ -94,6 +97,80 @@ public partial class SettingsWindow : Window
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private static readonly string PresetsDir = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "Presets");
+
+    private void ExportPreset_Click(object sender, RoutedEventArgs e)
+    {
+        string presetName = string.IsNullOrEmpty(_settings.ActivePreset) ? "Custom" : _settings.ActivePreset;
+        var dlg = new SaveFileDialog
+        {
+            Title      = "Export Preset",
+            FileName   = $"{presetName}.json",
+            Filter     = "JSON preset|*.json",
+            DefaultExt = ".json"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var preset = new Preset { Name = presetName, Bands = (float[])_settings.BandGains.Clone() };
+            File.WriteAllText(dlg.FileName, JsonConvert.SerializeObject(preset, Formatting.Indented));
+            MessageBox.Show($"Preset exported to:\n{dlg.FileName}", "Exported",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed:\n{ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ImportPreset_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Title = "Import Preset", Filter = "JSON preset|*.json" };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var json   = File.ReadAllText(dlg.FileName);
+            var preset = JsonConvert.DeserializeObject<Preset>(json);
+            if (preset?.Bands == null || preset.Bands.Length != 10)
+            {
+                MessageBox.Show("Invalid preset file — must have 10 band values.", "Import failed",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(preset.Name))
+                preset.Name = Path.GetFileNameWithoutExtension(dlg.FileName);
+
+            // Sanitize name: strip path chars
+            foreach (char c in Path.GetInvalidFileNameChars())
+                preset.Name = preset.Name.Replace(c, '_');
+
+            var destPath = Path.Combine(PresetsDir, $"{preset.Name}.json");
+            if (File.Exists(destPath))
+            {
+                var confirm = MessageBox.Show(
+                    $"A preset named '{preset.Name}' already exists. Overwrite?",
+                    "Conflict", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (confirm != MessageBoxResult.Yes) return;
+            }
+
+            Directory.CreateDirectory(PresetsDir);
+            File.WriteAllText(destPath, json);
+            ImportedPreset = preset;
+            MessageBox.Show($"Preset '{preset.Name}' imported.", "Imported",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Import failed:\n{ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private static bool IsStartupRegistered()
     {

@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-06-23
+**Date:** 2026-06-24
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -22,9 +22,9 @@ Key features:
 
 ## Current Status
 
-**All phases complete. App is release-ready.**
+**v1 shipped. v2 feature work in progress.**
 
-The app builds and runs against .NET 10. The UI is fully functional — sliders, toggle, preset combo, animated frequency visualizer, error banner, tray icon, hide-to-tray on close all work. When EqualizerAPO is not installed, the app correctly shows the error banner and disables EQ controls.
+v1 is complete and distributed. v2 visual redesign is complete and most new features are implemented. Builds clean (0 errors, 0 warnings).
 
 | Phase | Status |
 |---|---|
@@ -33,6 +33,8 @@ The app builds and runs against .NET 10. The UI is fully functional — sliders,
 | Phase 3: Hearing calibration wizard (NAudio) | **Done** |
 | Phase 4: Settings screen | **Done** |
 | Phase 4: Installer (NSIS + portable ZIP) | **Done** |
+| v2: Core visual redesign | **Done** |
+| **v2: Feature additions** | **In progress** |
 
 ---
 
@@ -44,21 +46,25 @@ GamingEqualizer/
   app.manifest                  asInvoker (dev); change to requireAdministrator for release
   GlobalUsings.cs               Resolves WPF vs WinForms namespace conflicts
   App.xaml / App.xaml.cs        App entry, dark theme resource dict, tray init
-  MainWindow.xaml / .cs         10-band EQ UI, preset combo, toggle, error banner, animated visualizer
+  MainWindow.xaml / .cs         10-band EQ UI, preset chips, toggle, visualizer, live mode, mini mode
+  MiniWindow.xaml / .cs         Always-on-top compact widget (500×58px, draggable)
+  SavePresetDialog.xaml / .cs   Name-input dialog for saving custom presets
   CalibrationWizard.xaml / .cs  Hearing calibration wizard (Phase 3 — complete)
-  SettingsWindow.xaml / .cs     Settings screen: launch-with-Windows, default preset, re-calibrate
+  SettingsWindow.xaml / .cs     Settings: launch-with-Windows, default preset, re-calibrate, import/export
+  HotkeyManager.cs              RegisterHotKey/UnregisterHotKey P/Invoke wrapper
+  AudioSpectrumAnalyzer.cs      WasapiLoopbackCapture + FFT → 80-bar spectrum data
   TrayController.cs             NotifyIcon, Toggle/Open/Quit, hide-to-tray
   EQConfigWriter.cs             Apply(bands) / Bypass(), retry + Include fallback
-  PresetManager.cs              Loads Presets/*.json, falls back to Flat
+  PresetManager.cs              Loads Presets/*.json, Reload(), falls back to Flat
   Logger.cs                     Appends to %AppData%\GamingEqualizer\error.log
   Models/
     AppSettings.cs              Load/save JSON to %AppData%\GamingEqualizer\
     Preset.cs
     HearingProfile.cs
   Presets/
-    FPS.json / RPG.json / Cinematic.json / Flat.json
+    FPS.json / RPG.json / Cinematic.json / Flat.json / Music.json
   Assets/
-    app-icon.ico                Multi-size (16/32/48/256px) — used for exe + window title bar
+    app-icon.ico                Multi-size (16/32/48/256px) — ApplicationIcon in .csproj
     tray-icon-on.ico            Full-color version of app icon for tray (EQ on)
     tray-icon-off.ico           Desaturated/dimmed version for tray (EQ off)
 
@@ -78,11 +84,27 @@ GamingEqualizer/
 - `app/GamingEqualizer.exe` — raw self-contained EXE (166 MB uncompressed)
 - `installer.nsi` — NSIS source script; rebuild with `makensis installer.nsi` if you need to update the installer
 
-The Settings screen (`SettingsWindow.xaml/.cs`) is complete with:
-- "Launch with Windows" toggle — writes/removes `HKCU\...\Run` entry with `--minimized` flag
-- Default preset selector (saved in `AppSettings.DefaultPreset`)
-- Re-run calibration button (applies result back to main window via `DialogResult = true` + `NewCalibrationGains`)
-- Opened via "⚙ Settings" button in the MainWindow header
+**v2 is in active development.** Core visual redesign is done. Remaining v2 work:
+
+| Feature | Status |
+|---|---|
+| Purple→pink gradient palette, new layout | **Done** |
+| 80-bar animated gradient visualizer (top of window) | **Done** |
+| Custom slider visuals: colored fill + glowing thumb | **Done** |
+| Preset chip row (replacing ComboBox) | **Done** |
+| Titlebar: logo icon, status pill, action buttons | **Done** |
+| Music preset added | **Done** |
+| SettingsWindow visual update to match v2 palette | **Done** |
+| Global hotkeys (Ctrl+Alt+E toggle, Ctrl+Alt+P cycle) | **Done** |
+| Custom preset save (name dialog → Presets/*.json) | **Done** |
+| Preset import / export (.json files, in Settings) | **Done** |
+| Preset transition animations (smooth slider sweep) | **Done** |
+| Mini / compact mode (always-on-top 500×58 widget) | **Done** |
+| Live audio visualizer (WASAPI loopback + FFT) | **Done** |
+| First-run onboarding walkthrough | Not started |
+| Left/right ear calibration | Not started |
+
+**Note:** `app.manifest` is currently set to `asInvoker` for dev testing. Switch back to `requireAdministrator` before building the v2 release installer.
 
 ---
 
@@ -94,6 +116,7 @@ None for v1. All previously known issues are resolved:
 |---|---|
 | `app.manifest` was `asInvoker` | Now `requireAdministrator` in release build |
 | Tray icons were placeholders | Replaced with real icons generated from the app logo PNG |
+| `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Removed XAML `Icon=` attribute; exe icon comes from `<ApplicationIcon>` in .csproj |
 
 ---
 
@@ -102,7 +125,7 @@ None for v1. All previously known issues are resolved:
 | Dependency | Notes |
 |---|---|
 | EqualizerAPO | Downloaded and installed automatically by the NSIS installer. App detects it at `C:\Program Files\EqualizerAPO\`. Not bundled in the EXE due to licensing. |
-| NAudio (NuGet) | Used for calibration wizard sine tone playback |
+| NAudio (NuGet) | Calibration wizard sine tone playback + `WasapiLoopbackCapture` + `FastFourierTransform` for live visualizer |
 | Newtonsoft.Json (NuGet) | Read/write preset and profile JSON files |
 | .NET 10 | Target runtime. Installer should publish self-contained. |
 
@@ -115,7 +138,10 @@ None for v1. All previously known issues are resolved:
 - **Calibration algorithm:** `gain = -(threshold_dB - reference_dB)`, clamped to ±12 dB, normalized so loudest band = 0 dB. Applied as a base layer under preset gains.
 - **State storage:** `%AppData%\GamingEqualizer\AppSettings.json` — active preset, on/off state, band gains, launch-with-Windows flag, last calibration.
 - **Error policy:** Config write failures show an error banner and revert; corrupted JSON files are skipped and logged to `error.log`; NAudio device failure cancels the calibration wizard with a clear message.
-- **WPF + WinForms coexistence:** `UseWindowsForms=true` is needed for `NotifyIcon`. All ambiguities (`Application`, `Orientation`, `HorizontalAlignment`, etc.) are resolved in `GlobalUsings.cs`.
+- **WPF + WinForms coexistence:** `UseWindowsForms=true` is needed for `NotifyIcon`. All ambiguities (`Application`, `Orientation`, `HorizontalAlignment`, `OpenFileDialog`, `SaveFileDialog`, `Button`, etc.) are resolved in `GlobalUsings.cs`.
+- **Visualizer array size:** `_vizCurrent` and `_vizTarget` are `double[80]` (one per bar). In EQ mode, `SetVizTargets()` interpolates from 10 band gains → 80 bars. In live mode, `AudioSpectrumAnalyzer` writes all 80 directly from FFT. Do not shrink these back to 10.
+- **Global hotkeys:** Registered in `OnSourceInitialized` via `HotkeyManager`, unregistered in `OnClosed`. Ctrl+Alt+E = toggle, Ctrl+Alt+P = cycle preset. If hotkey registration fails silently (another app owns the combo), no error is shown.
+- **Mini window:** `MiniWindow` is non-modal, shares the same `AppSettings` + `PresetManager` references as `MainWindow`. All state mutations (toggle, preset click) route back through `MainWindow` methods via delegates. `RefreshUI()` must be called on `MiniWindow` after any state change to keep it in sync.
 
 ---
 
@@ -125,18 +151,17 @@ None for v1. All previously known issues are resolved:
 
 **Concept file:** [v2-concept.md](v2-concept.md) — full design spec for v2.
 
-Key changes planned for v2:
+Key changes (v1 → v2):
 
 | Area | v1 | v2 |
 |---|---|---|
 | Color palette | Flat neon green (#00FF88) | Purple→pink gradient across bands (#7c3aed → #f472b6) |
 | Titlebar | Plain text + toggle button | Logo icon, live status pill, all buttons in one row |
-| Visualizer | Bottom of the panel | Top of the window — first thing you see |
-| Sliders | Default WPF style | Custom styled with glowing thumbs + colored fills |
-| Preset selector | Dropdown (ComboBox) | Clickable chip row |
-| Buttons | Flat bordered | Styled with gaming accent colors (purple primary, pink danger) |
-
-**Also planned for v2:** first-run tutorial / onboarding walkthrough for new users.
+| Visualizer | Bottom of the panel | Top of the window — 80 animated bars with gradient colors |
+| Sliders | Default WPF style | Canvas overlay: colored fill from center + glowing band-colored thumb |
+| Preset selector | Dropdown (ComboBox) | Clickable chip row (ToggleButtons) |
+| Buttons | Flat bordered | Purple primary / pink danger tinted styles |
+| Presets | FPS, RPG, Cinematic, Flat | + Music (V-shaped curve: bass + treble lift) |
 
 ---
 

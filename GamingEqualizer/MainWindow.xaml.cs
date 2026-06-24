@@ -1,32 +1,66 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
-using WpfRect = System.Windows.Shapes.Rectangle;
+using Newtonsoft.Json;
+using WpfRect    = System.Windows.Shapes.Rectangle;
+using WpfEllipse = System.Windows.Shapes.Ellipse;
+using WpfColor   = System.Windows.Media.Color;
 using GamingEqualizer.Models;
 
 namespace GamingEqualizer;
 
 public partial class MainWindow : Window
 {
-    private static readonly int[] BandFreqs = { 32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
     private static readonly string[] BandLabels = { "32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k" };
 
-    private readonly Slider[] _sliders = new Slider[10];
-    private readonly TextBlock[] _gainLabels = new TextBlock[10];
+    // Per-band slider + visual elements
+    private readonly Slider[]     _sliders      = new Slider[10];
+    private readonly TextBlock[]  _gainLabels   = new TextBlock[10];
+    private readonly WpfRect[]    _sliderFills  = new WpfRect[10];
+    private readonly WpfEllipse[] _sliderThumbs = new WpfEllipse[10];
 
-    private readonly AppSettings _settings;
-    private readonly EQConfigWriter _eqWriter = new();
-    private readonly PresetManager _presetManager = new();
+    private const double SliderH  = 180;
+    private const double CenterY  = SliderH / 2.0;
+    private const double MaxFillH = CenterY - 6;
+
+    // Preset chips
+    private readonly List<(string Name, ToggleButton Chip)> _chips = new();
+
+    private readonly AppSettings    _settings;
+    private readonly EQConfigWriter _eqWriter      = new();
+    private readonly PresetManager  _presetManager = new();
+
+    private HwndSource? _hwndSource;
+    private MiniWindow? _miniWindow;
 
     private bool _suppressPresetChange = false;
     private bool _suppressSliderChange = false;
 
-    // Visualizer
-    private readonly WpfRect[] _vizBars = new WpfRect[10];
-    private readonly double[] _vizCurrent = new double[10];
-    private readonly double[] _vizTarget = new double[10];
-    private DispatcherTimer? _vizTimer;
+    // ── Visualizer ──────────────────────────────────────────────────────────
+    private const int VizBars = 80;
+    private readonly WpfRect[] _vizBars    = new WpfRect[VizBars];
+    private readonly double[]  _vizCurrent = new double[VizBars];
+    private readonly double[]  _vizTarget  = new double[VizBars];
+    private WpfRect?           _vizCenter;
+    private double             _ripplePhase;
+    private DispatcherTimer?   _vizTimer;
+
+    // Live audio
+    private bool                   _liveMode;
+    private AudioSpectrumAnalyzer? _spectrum;
+
+    // Status dot pulse
+    private DispatcherTimer? _pulseTimer;
+    private bool             _pulseHigh = true;
+
+    // Preset transition animation
+    private readonly float[] _transitionTarget  = new float[10];
+    private DispatcherTimer?  _transitionTimer;
 
     public MainWindow()
     {
@@ -35,98 +69,291 @@ public partial class MainWindow : Window
         _presetManager.Load();
 
         BuildSliders();
-        BuildFreqLabels();
-        PopulatePresetCombo();
+        BuildPresetChips();
         RestoreState();
         BuildVisualizer();
+        StartPulse();
 
         if (!EQConfigWriter.IsEqualizerApoInstalled())
             ShowEqApoMissingBanner();
     }
 
+    // ── Band color ──────────────────────────────────────────────────────────
+
+    private static WpfColor BandColor(double t)
+    {
+        byte r = (byte)(124 + (244 - 124) * t);
+        byte g = (byte)(58  + (114 - 58)  * t);
+        byte b = (byte)(237 + (182 - 237) * t);
+        return WpfColor.FromRgb(r, g, b);
+    }
+
+    // ── Sliders ─────────────────────────────────────────────────────────────
+
     private void BuildSliders()
     {
+        var chipStyle = (Style)Application.Current.Resources["TransparentSliderStyle"];
+
         for (int i = 0; i < 10; i++)
         {
-            int idx = i;
+            int idx   = i;
+            double t  = i / 9.0;
+            var color = BandColor(t);
+            var brush = new SolidColorBrush(color);
 
-            var container = new StackPanel
-            {
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-
-            var slider = new Slider
-            {
-                Orientation = Orientation.Vertical,
-                Minimum = -12,
-                Maximum = 12,
-                TickFrequency = 1,
-                IsSnapToTickEnabled = true,
-                Width = 40,
-                Height = 160,
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (SolidColorBrush)Application.Current.Resources["AccentBrush"]
-            };
-
-            slider.ValueChanged += (_, _) => OnSliderChanged(idx);
-            _sliders[idx] = slider;
-
+            // Gain label
             var gainLabel = new TextBlock
             {
-                Text = "0.0",
-                Foreground = (SolidColorBrush)Application.Current.Resources["TextDimBrush"],
+                Text                = "0",
+                Foreground          = brush,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                FontSize = 11
+                FontSize            = 11,
+                FontWeight          = FontWeights.SemiBold,
+                Margin              = new Thickness(0, 0, 0, 4)
             };
             _gainLabels[idx] = gainLabel;
 
-            container.Children.Add(gainLabel);
-            container.Children.Add(slider);
-            SliderGrid.Children.Add(container);
+            // Visual canvas: track + fill + thumb
+            var canvas = new Canvas { Width = 32, Height = SliderH };
+
+            // Track background
+            var track = new WpfRect
+            {
+                Width   = 4,
+                Height  = SliderH,
+                Fill    = new SolidColorBrush(WpfColor.FromRgb(20, 20, 40)),
+                RadiusX = 2, RadiusY = 2
+            };
+            Canvas.SetLeft(track, 14);
+            Canvas.SetTop(track, 0);
+            canvas.Children.Add(track);
+
+            // Zero tick
+            var tick = new WpfRect
+            {
+                Width  = 12,
+                Height = 1,
+                Fill   = new SolidColorBrush(WpfColor.FromRgb(42, 42, 74))
+            };
+            Canvas.SetLeft(tick, 10);
+            Canvas.SetTop(tick, CenterY);
+            canvas.Children.Add(tick);
+
+            // Fill (from center)
+            var fill = new WpfRect
+            {
+                Width   = 4,
+                Height  = 0,
+                Fill    = brush,
+                RadiusX = 2, RadiusY = 2,
+                Opacity = 0.9
+            };
+            Canvas.SetLeft(fill, 14);
+            Canvas.SetTop(fill, CenterY);
+            canvas.Children.Add(fill);
+            _sliderFills[idx] = fill;
+
+            // Thumb ellipse
+            var thumb = new WpfEllipse
+            {
+                Width           = 13,
+                Height          = 13,
+                Fill            = new SolidColorBrush(WpfColor.FromRgb(11, 11, 22)),
+                Stroke          = brush,
+                StrokeThickness = 2,
+                Effect          = new DropShadowEffect
+                {
+                    Color       = color,
+                    BlurRadius  = 10,
+                    ShadowDepth = 0,
+                    Opacity     = 0.85
+                }
+            };
+            Canvas.SetLeft(thumb, 9.5);
+            Canvas.SetTop(thumb, CenterY - 6.5);
+            canvas.Children.Add(thumb);
+            _sliderThumbs[idx] = thumb;
+
+            // Transparent slider overlaid for mouse interaction
+            var slider = new Slider
+            {
+                Orientation        = Orientation.Vertical,
+                Minimum            = -12,
+                Maximum            = 12,
+                TickFrequency      = 1,
+                IsSnapToTickEnabled = true,
+                Width              = 32,
+                Height             = SliderH,
+                Style              = chipStyle
+            };
+            slider.ValueChanged += (_, _) => OnSliderChanged(idx);
+            _sliders[idx] = slider;
+
+            // Overlay grid
+            var overlay = new Grid { Width = 32, Height = SliderH };
+            overlay.Children.Add(canvas);
+            overlay.Children.Add(slider);
+
+            // Freq label
+            var freqLabel = new TextBlock
+            {
+                Text                = BandLabels[i] + "Hz",
+                Foreground          = new SolidColorBrush(WpfColor.FromRgb(42, 42, 74)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FontSize            = 10,
+                Margin              = new Thickness(0, 4, 0, 0)
+            };
+
+            var col = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            col.Children.Add(gainLabel);
+            col.Children.Add(overlay);
+            col.Children.Add(freqLabel);
+
+            SliderGrid.Children.Add(col);
         }
     }
 
-    private void BuildFreqLabels()
+    private void UpdateSliderVisual(int idx)
     {
+        float gain   = _settings.BandGains[idx];
+        double fillH = Math.Abs(gain) / 12.0 * MaxFillH;
+        fillH = Math.Max(2, fillH);
+
+        _sliderFills[idx].Height = fillH;
+        Canvas.SetTop(_sliderFills[idx], gain >= 0 ? CenterY - fillH : CenterY);
+
+        double thumbTop = CenterY - (gain / 12.0 * MaxFillH) - 6.5;
+        Canvas.SetTop(_sliderThumbs[idx], thumbTop);
+    }
+
+    // ── Preset chips ─────────────────────────────────────────────────────────
+
+    private void BuildPresetChips()
+    {
+        _presetManager.Presets.ToList().ForEach(p => AddChip(p.Name, onClick: () => OnChipClick(p.Name)));
+        AddChip("Custom", onClick: null);
+    }
+
+    private void AddChip(string name, Action? onClick)
+    {
+        var chip = new ToggleButton
+        {
+            Content = name,
+            Style   = (Style)Application.Current.Resources["ChipStyle"]
+        };
+
+        if (onClick != null)
+        {
+            chip.Click += (_, _) =>
+            {
+                if (_suppressPresetChange) return;
+                onClick();
+            };
+        }
+        else
+        {
+            // Custom chip: visually selectable but no preset load
+            chip.Click += (_, _) => { chip.IsChecked = true; };
+        }
+
+        _chips.Add((name, chip));
+        ChipPanel.Children.Add(chip);
+    }
+
+    private void OnChipClick(string presetName)
+    {
+        var preset = _presetManager.Get(presetName);
+        if (preset == null) return;
+
+        for (int i = 0; i < 10; i++)
+            _transitionTarget[i] = preset.Bands[i];
+
+        _settings.ActivePreset = presetName;
+        _settings.Save();
+        SetActiveChip(presetName);
+
+        StartPresetTransition();
+    }
+
+    private void StartPresetTransition()
+    {
+        _transitionTimer?.Stop();
+        _transitionTimer          = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _transitionTimer.Tick    += TransitionTick;
+        _transitionTimer.Start();
+    }
+
+    private void TransitionTick(object? sender, EventArgs e)
+    {
+        bool done = true;
         for (int i = 0; i < 10; i++)
         {
-            FreqLabels.Children.Add(new TextBlock
+            float diff = _transitionTarget[i] - _settings.BandGains[i];
+            if (Math.Abs(diff) > 0.05f)
             {
-                Text = BandLabels[i] + "Hz",
-                Foreground = (SolidColorBrush)Application.Current.Resources["TextDimBrush"],
-                HorizontalAlignment = HorizontalAlignment.Center,
-                FontSize = 11
-            });
+                _settings.BandGains[i] += diff * 0.18f;
+                done = false;
+            }
+            else
+            {
+                _settings.BandGains[i] = _transitionTarget[i];
+            }
+
+            _gainLabels[i].Text = FormatGain(_settings.BandGains[i]);
+            UpdateSliderVisual(i);
+        }
+
+        SetVizTargets();
+
+        if (_settings.EqEnabled)
+            ApplyCurrentGains();
+
+        if (done)
+        {
+            _transitionTimer?.Stop();
+            _suppressSliderChange = true;
+            for (int i = 0; i < 10; i++)
+                _sliders[i].Value = _settings.BandGains[i];
+            _suppressSliderChange = false;
+            _settings.Save();
         }
     }
 
-    private void PopulatePresetCombo()
+    private void SetActiveChip(string? name)
     {
         _suppressPresetChange = true;
-        PresetCombo.Items.Clear();
-        foreach (var preset in _presetManager.Presets)
-            PresetCombo.Items.Add(preset.Name);
+        foreach (var (n, chip) in _chips)
+            chip.IsChecked = n == name;
         _suppressPresetChange = false;
     }
+
+    // ── State / events ───────────────────────────────────────────────────────
 
     private void RestoreState()
     {
         _suppressSliderChange = true;
         for (int i = 0; i < 10; i++)
         {
-            _sliders[i].Value = _settings.BandGains[i];
-            _gainLabels[i].Text = _settings.BandGains[i].ToString("F1");
+            _sliders[i].Value   = _settings.BandGains[i];
+            _gainLabels[i].Text = FormatGain(_settings.BandGains[i]);
         }
+        SetVizTargets();
+        Array.Copy(_vizTarget, _vizCurrent, VizBars);
         _suppressSliderChange = false;
 
         SetEqState(_settings.EqEnabled, writeConfig: false);
+        SetActiveChip(_settings.ActivePreset);
 
-        _suppressPresetChange = true;
-        PresetCombo.SelectedItem = _settings.ActivePreset;
-        _suppressPresetChange = false;
+        // Update all slider visuals after layout is ready
+        Dispatcher.InvokeAsync(() =>
+        {
+            for (int i = 0; i < 10; i++) UpdateSliderVisual(i);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
 
-        // Apply the saved gains on startup
         if (_settings.EqEnabled)
             ApplyCurrentGains();
     }
@@ -134,19 +361,21 @@ public partial class MainWindow : Window
     private void OnSliderChanged(int idx)
     {
         if (_suppressSliderChange) return;
+        _transitionTimer?.Stop();
 
         float val = (float)_sliders[idx].Value;
-        _gainLabels[idx].Text = val.ToString("F1");
+        _gainLabels[idx].Text    = FormatGain(val);
         _settings.BandGains[idx] = val;
 
-        // Moving a slider deselects named preset
-        _suppressPresetChange = true;
-        PresetCombo.SelectedIndex = -1;
-        _suppressPresetChange = false;
+        UpdateSliderVisual(idx);
+
+        // Moving a slider switches to Custom
+        SetActiveChip("Custom");
         _settings.ActivePreset = "";
 
         _settings.Save();
         SetVizTargets();
+
         if (_settings.EqEnabled)
             ApplyCurrentGains();
     }
@@ -163,52 +392,39 @@ public partial class MainWindow : Window
 
         if (enabled)
         {
-            ToggleButton.Content = "DISABLE EQ";
-            StatusLabel.Text = " · ON";
-            StatusLabel.Foreground = (SolidColorBrush)Application.Current.Resources["AccentBrush"];
+            ToggleButton.Content = "■ DISABLE";
+            ToggleButton.Style   = (Style)Application.Current.Resources["DangerButtonStyle"];
+            StatusLabel.Text     = "EQ ACTIVE";
+            StatusLabel.Foreground = new SolidColorBrush(WpfColor.FromRgb(167, 139, 250));
+            StatusDot.Fill       = new SolidColorBrush(WpfColor.FromRgb(124, 58, 237));
+            StatusPill.BorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x55, 0x7c, 0x3a, 0xed));
+            _pulseTimer?.Start();
             if (writeConfig) ApplyCurrentGains();
         }
         else
         {
-            ToggleButton.Content = "ENABLE EQ";
-            StatusLabel.Text = " · OFF";
-            StatusLabel.Foreground = (SolidColorBrush)Application.Current.Resources["TextDimBrush"];
+            ToggleButton.Content = "▶ ENABLE";
+            ToggleButton.Style   = (Style)Application.Current.Resources["PrimaryButtonStyle"];
+            StatusLabel.Text     = "EQ OFF";
+            StatusLabel.Foreground = new SolidColorBrush(WpfColor.FromRgb(68, 68, 90));
+            StatusDot.Fill       = new SolidColorBrush(WpfColor.FromRgb(42, 42, 68));
+            StatusDot.Opacity    = 1;
+            StatusPill.BorderBrush = new SolidColorBrush(WpfColor.FromArgb(0x33, 0x44, 0x44, 0x5a));
+            _pulseTimer?.Stop();
             if (writeConfig) SafeBypass();
         }
-    }
-
-    private void PresetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppressPresetChange || PresetCombo.SelectedItem is not string presetName) return;
-
-        var preset = _presetManager.Get(presetName);
-        if (preset == null) return;
-
-        _suppressSliderChange = true;
-        for (int i = 0; i < 10; i++)
-        {
-            _sliders[i].Value = preset.Bands[i];
-            _gainLabels[i].Text = preset.Bands[i].ToString("F1");
-            _settings.BandGains[i] = preset.Bands[i];
-        }
-        _suppressSliderChange = false;
-
-        _settings.ActivePreset = presetName;
-        _settings.Save();
-        SetVizTargets();
-
-        if (_settings.EqEnabled)
-            ApplyCurrentGains();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         var win = new SettingsWindow(_settings, _presetManager) { Owner = this };
-        if (win.ShowDialog() == true && win.NewCalibrationGains != null)
-        {
-            ApplyCalibrationGains(win.NewCalibrationGains);
-        }
+        win.ShowDialog();
+        if (win.NewCalibrationGains != null) ApplyCalibrationGains(win.NewCalibrationGains);
+        if (win.ImportedPreset != null)      HandleImportedPreset(win.ImportedPreset);
     }
+
+    private void LiveModeButton_Click(object sender, RoutedEventArgs e)
+        => ToggleLiveMode((WpfButton)sender);
 
     private void CalibrationButton_Click(object sender, RoutedEventArgs e)
     {
@@ -226,53 +442,38 @@ public partial class MainWindow : Window
         _suppressSliderChange = true;
         for (int i = 0; i < 10 && i < gains.Length; i++)
         {
-            _sliders[i].Value = gains[i];
-            _gainLabels[i].Text = gains[i].ToString("F1");
-            _settings.BandGains[i] = gains[i];
+            _sliders[i].Value        = gains[i];
+            _gainLabels[i].Text      = FormatGain(gains[i]);
+            _settings.BandGains[i]   = gains[i];
+            UpdateSliderVisual(i);
         }
         _suppressSliderChange = false;
+
         _settings.ActivePreset = "";
-
-        _suppressPresetChange = true;
-        PresetCombo.SelectedIndex = -1;
-        _suppressPresetChange = false;
-
+        SetActiveChip("Custom");
         _settings.Save();
         SetVizTargets();
+
         if (_settings.EqEnabled)
             ApplyCurrentGains();
     }
 
     private void ApplyCurrentGains()
     {
-        try
-        {
-            _eqWriter.Apply(_settings.BandGains);
-            HideErrorBanner();
-        }
-        catch (Exception ex)
-        {
-            ShowErrorBanner($"Failed to apply EQ: {ex.Message}");
-        }
+        try   { _eqWriter.Apply(_settings.BandGains); HideErrorBanner(); }
+        catch (Exception ex) { ShowErrorBanner($"Failed to apply EQ: {ex.Message}"); }
     }
 
     private void SafeBypass()
     {
-        try
-        {
-            _eqWriter.Bypass();
-            HideErrorBanner();
-        }
-        catch (Exception ex)
-        {
-            ShowErrorBanner($"Failed to bypass EQ: {ex.Message}");
-        }
+        try   { _eqWriter.Bypass(); HideErrorBanner(); }
+        catch (Exception ex) { ShowErrorBanner($"Failed to bypass EQ: {ex.Message}"); }
     }
 
     private void ShowErrorBanner(string message)
     {
-        ErrorText.Text = message;
-        ErrorBanner.Visibility = Visibility.Visible;
+        ErrorText.Text          = message;
+        ErrorBanner.Visibility  = Visibility.Visible;
     }
 
     private void HideErrorBanner() => ErrorBanner.Visibility = Visibility.Collapsed;
@@ -287,114 +488,305 @@ public partial class MainWindow : Window
 
     protected void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // Hide to tray instead of closing
         e.Cancel = true;
         Hide();
     }
 
-    // ── Visualizer ────────────────────────────────────────────────────────────
+    private static string FormatGain(float v)
+        => v >= 0 ? $"+{v:F0}" : $"{v:F0}";
+
+    // ── Status dot pulse ─────────────────────────────────────────────────────
+
+    private void StartPulse()
+    {
+        _pulseTimer          = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        _pulseTimer.Tick    += (_, _) =>
+        {
+            _pulseHigh           = !_pulseHigh;
+            StatusDot.Opacity    = _pulseHigh ? 1.0 : 0.35;
+        };
+
+        if (_settings.EqEnabled)
+            _pulseTimer.Start();
+    }
+
+    // ── Visualizer ───────────────────────────────────────────────────────────
 
     private void BuildVisualizer()
     {
-        var accent = (SolidColorBrush)Application.Current.Resources["AccentBrush"];
-        var dimAccent = new SolidColorBrush(System.Windows.Media.Color.FromArgb(80, accent.Color.R, accent.Color.G, accent.Color.B));
-
-        for (int i = 0; i < 10; i++)
-        {
-            _vizBars[i] = new WpfRect
-            {
-                Fill = dimAccent,
-                RadiusX = 2,
-                RadiusY = 2
-            };
-            VisualizerCanvas.Children.Add(_vizBars[i]);
-        }
-
         // Center line
-        var centerLine = new WpfRect
+        _vizCenter = new WpfRect
         {
-            Fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 255, 255, 255)),
-            Height = 1
+            Height = 1,
+            Fill   = new SolidColorBrush(WpfColor.FromArgb(60, 30, 30, 58))
         };
-        VisualizerCanvas.Children.Add(centerLine);
-        Canvas.SetTop(centerLine, 0);
-        Canvas.SetLeft(centerLine, 0);
-        centerLine.Width = double.NaN; // will be set in SizeChanged
+        VisualizerCanvas.Children.Add(_vizCenter);
 
-        // Store center line for SizeChanged
-        _vizCenterLine = centerLine;
-
-        // Seed current values from settings so first frame isn't a snap from 0
-        for (int i = 0; i < 10; i++)
+        // 80 gradient bars
+        for (int j = 0; j < VizBars; j++)
         {
-            _vizCurrent[i] = _settings.BandGains[i];
-            _vizTarget[i] = _settings.BandGains[i];
+            double t    = j / (double)(VizBars - 1);
+            var    bar  = new WpfRect
+            {
+                Fill    = new SolidColorBrush(BandColor(t)),
+                RadiusX = 1, RadiusY = 1
+            };
+            VisualizerCanvas.Children.Add(bar);
+            _vizBars[j] = bar;
         }
 
-        _vizTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _vizTimer.Tick += VizTick;
+        _vizTimer          = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _vizTimer.Tick    += VizTick;
         _vizTimer.Start();
     }
 
-    private WpfRect? _vizCenterLine;
-
     private void VisualizerCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
-        => PositionAllVizBars();
+        => PositionVizBars();
 
     private void VizTick(object? sender, EventArgs e)
     {
-        bool dirty = false;
-        for (int i = 0; i < 10; i++)
+        double lerp = _liveMode ? 0.30 : 0.15;
+        double snap = _liveMode ? 0.05 : 0.02;
+
+        for (int i = 0; i < VizBars; i++)
         {
             double diff = _vizTarget[i] - _vizCurrent[i];
-            if (Math.Abs(diff) > 0.01)
-            {
-                _vizCurrent[i] += diff * 0.18;
-                dirty = true;
-            }
+            if (Math.Abs(diff) > snap)
+                _vizCurrent[i] += diff * lerp;
             else
-            {
                 _vizCurrent[i] = _vizTarget[i];
-            }
         }
-        if (dirty) PositionAllVizBars();
+
+        if (!_liveMode) _ripplePhase += 0.06;
+        PositionVizBars();
     }
 
-    private void PositionAllVizBars()
+    private void PositionVizBars()
     {
         double w = VisualizerCanvas.ActualWidth;
         double h = VisualizerCanvas.ActualHeight;
         if (w <= 0 || h <= 0) return;
 
-        double midY = h / 2.0;
-        double maxBarH = midY - 4;
-        double barW = Math.Max(4, w / 10.0 - 4);
+        double midY  = h / 2.0;
+        double maxH  = midY - 3;
+        double step  = w / VizBars;
+        double barW  = Math.Max(1, step - 1.2);
 
-        for (int i = 0; i < 10; i++)
+        for (int j = 0; j < VizBars; j++)
         {
-            double gain = _vizCurrent[i];
-            double barH = Math.Abs(gain) / 12.0 * maxBarH;
-            barH = Math.Max(1, barH);
+            double gain = _vizCurrent[j];
 
-            double x = i * (w / 10.0) + (w / 10.0 - barW) / 2.0;
+            if (!_liveMode)
+            {
+                double pos = j / (double)(VizBars - 1) * 9.0;
+                gain += Math.Sin(pos * 1.4 + _ripplePhase) * 0.35;
+            }
+
+            double barH = Math.Abs(gain) / 12.0 * maxH;
+            barH = Math.Max(2, barH);
+
+            double x = j * step + (step - barW) / 2.0;
             double y = gain >= 0 ? midY - barH : midY;
 
-            _vizBars[i].Width = barW;
-            _vizBars[i].Height = barH;
-            Canvas.SetLeft(_vizBars[i], x);
-            Canvas.SetTop(_vizBars[i], y);
+            _vizBars[j].Width   = barW;
+            _vizBars[j].Height  = barH;
+            _vizBars[j].Opacity = gain >= 0 ? 1.0 : 0.4;
+            Canvas.SetLeft(_vizBars[j], x);
+            Canvas.SetTop(_vizBars[j], y);
         }
 
-        if (_vizCenterLine != null)
+        if (_vizCenter != null)
         {
-            _vizCenterLine.Width = w;
-            Canvas.SetTop(_vizCenterLine, midY);
+            _vizCenter.Width = w;
+            Canvas.SetTop(_vizCenter, midY);
         }
     }
 
     private void SetVizTargets()
     {
-        for (int i = 0; i < 10; i++)
-            _vizTarget[i] = _settings.BandGains[i];
+        if (_liveMode) return; // live mode writes _vizTarget directly from FFT
+
+        for (int j = 0; j < VizBars; j++)
+        {
+            double pos  = j / (double)(VizBars - 1) * 9.0;
+            int    b0   = (int)pos;
+            int    b1   = Math.Min(9, b0 + 1);
+            double frac = pos - b0;
+            _vizTarget[j] = _settings.BandGains[b0] * (1 - frac) + _settings.BandGains[b1] * frac;
+        }
+    }
+
+    // ── Mini mode ────────────────────────────────────────────────────────────
+
+    private void MiniModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        Hide();
+        _miniWindow = new MiniWindow(
+            _settings, _presetManager,
+            onToggle:      MiniToggleEq,
+            onExpand:      ExpandFromMini,
+            onPresetClick: MiniPresetClick);
+        _miniWindow.Closed += (_, _) => _miniWindow = null;
+        _miniWindow.Show();
+    }
+
+    private void MiniToggleEq()
+    {
+        SetEqState(!_settings.EqEnabled, writeConfig: true);
+        _settings.Save();
+    }
+
+    private void MiniPresetClick(string presetName) => OnChipClick(presetName);
+
+    private void ExpandFromMini()
+    {
+        _miniWindow?.Close();
+        Show();
+        Activate();
+    }
+
+    // Sync mini window after any state change triggered from MainWindow hotkeys
+    private void SyncMiniWindow() => _miniWindow?.RefreshUI();
+
+    // ── Save preset ──────────────────────────────────────────────────────────
+
+    private void SavePresetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var existingNames = _chips
+            .Where(c => c.Name != "Custom")
+            .Select(c => c.Name);
+
+        var dlg = new SavePresetDialog(existingNames) { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.PresetName == null) return;
+
+        string name = dlg.PresetName;
+        try
+        {
+            var preset  = new Models.Preset { Name = name, Bands = (float[])_settings.BandGains.Clone() };
+            var dir     = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Presets");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, $"{name}.json"),
+                JsonConvert.SerializeObject(preset, Formatting.Indented));
+
+            _presetManager.Reload();
+            InsertPresetChip(name);
+            OnChipClick(name);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorBanner($"Failed to save preset: {ex.Message}");
+        }
+    }
+
+    private void InsertPresetChip(string name)
+    {
+        var chip = new ToggleButton
+        {
+            Content = name,
+            Style   = (Style)Application.Current.Resources["ChipStyle"]
+        };
+        chip.Click += (_, _) =>
+        {
+            if (_suppressPresetChange) return;
+            OnChipClick(name);
+        };
+
+        // Insert before the Custom chip (always last)
+        int idx = _chips.Count - 1;
+        _chips.Insert(idx, (name, chip));
+        ChipPanel.Children.Insert(idx, chip);
+
+        _miniWindow?.AddChip(name);
+    }
+
+    private void HandleImportedPreset(Models.Preset preset)
+    {
+        _presetManager.Reload();
+        if (_chips.Any(c => c.Name == preset.Name)) return;
+        InsertPresetChip(preset.Name);
+    }
+
+    // ── Global hotkeys ───────────────────────────────────────────────────────
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        _hwndSource = HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        _hwndSource?.AddHook(WndProc);
+        if (_hwndSource != null) HotkeyManager.Register(_hwndSource);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_hwndSource != null) HotkeyManager.Unregister(_hwndSource);
+        _spectrum?.Dispose();
+        base.OnClosed(e);
+    }
+
+    internal void ToggleLiveMode(WpfButton liveButton)
+    {
+        _liveMode = !_liveMode;
+
+        if (_liveMode)
+        {
+            try
+            {
+                _spectrum = new AudioSpectrumAnalyzer();
+                _spectrum.OnSpectrum = bars => Dispatcher.InvokeAsync(() =>
+                {
+                    for (int j = 0; j < VizBars; j++)
+                        _vizTarget[j] = bars[j];
+                });
+                _spectrum.Start();
+                liveButton.Content = "◉ LIVE";
+                liveButton.Style   = (Style)Application.Current.Resources["PrimaryButtonStyle"];
+            }
+            catch
+            {
+                _liveMode = false;
+                _spectrum = null;
+                ShowErrorBanner("WASAPI audio capture failed. Is a playback device available?");
+            }
+        }
+        else
+        {
+            _spectrum?.Dispose();
+            _spectrum          = null;
+            liveButton.Content = "○ LIVE";
+            liveButton.Style   = (Style)Application.Current.Resources[typeof(WpfButton)];
+            SetVizTargets();
+        }
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == HotkeyManager.WM_HOTKEY)
+        {
+            int id = wParam.ToInt32();
+            if (id == HotkeyManager.HK_TOGGLE)
+            {
+                SetEqState(!_settings.EqEnabled, writeConfig: true);
+                _settings.Save();
+                SyncMiniWindow();
+                handled = true;
+            }
+            else if (id == HotkeyManager.HK_CYCLE)
+            {
+                CyclePreset();
+                SyncMiniWindow();
+                handled = true;
+            }
+        }
+        return IntPtr.Zero;
+    }
+
+    private void CyclePreset()
+    {
+        var presetChips = _chips.Where(c => c.Name != "Custom").ToList();
+        if (presetChips.Count == 0) return;
+
+        int current = presetChips.FindIndex(c => c.Name == _settings.ActivePreset);
+        int next    = (current + 1) % presetChips.Count;
+        OnChipClick(presetChips[next].Name);
     }
 }

@@ -36,6 +36,8 @@ public class PresetManager
             Presets.Add(new Preset { Name = "Flat", Bands = new float[10] });
     }
 
+    public void Reload() => Load();
+
     public Preset? Get(string name) =>
         Presets.FirstOrDefault(p => p.Name == name) ?? Presets.FirstOrDefault(p => p.Name == "Flat");
 }

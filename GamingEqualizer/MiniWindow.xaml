@@ -1,0 +1,70 @@
+<Window x:Class="GamingEqualizer.MiniWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="G Equalizer"
+        Width="500" Height="58"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="False"
+        Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        Background="#0b0b16"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Border BorderBrush="#181828" BorderThickness="1" CornerRadius="0">
+        <Grid Margin="12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Logo -->
+            <Border Grid.Column="0" Width="24" Height="24" CornerRadius="5" Margin="0,0,10,0"
+                    VerticalAlignment="Center">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#7c3aed" Offset="0"/>
+                        <GradientStop Color="#db2777" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <TextBlock Text="G" Foreground="White" FontWeight="Black" FontSize="12"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- Status pill -->
+            <Border x:Name="MiniStatusPill" Grid.Column="1"
+                    BorderBrush="#7c3aed55" BorderThickness="1"
+                    CornerRadius="10" Padding="8,3"
+                    VerticalAlignment="Center" Margin="0,0,10,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse x:Name="MiniStatusDot" Width="6" Height="6"
+                             Fill="#7c3aed" Margin="0,0,6,0"/>
+                    <TextBlock x:Name="MiniStatusLabel" Text="EQ ACTIVE"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="#a78bfa"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Preset chips -->
+            <StackPanel x:Name="MiniChipPanel" Grid.Column="2"
+                        Orientation="Horizontal" VerticalAlignment="Center"/>
+
+            <!-- Action buttons -->
+            <StackPanel Grid.Column="3" Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button x:Name="MiniToggleButton"
+                        Content="■ OFF"
+                        Style="{StaticResource DangerButtonStyle}"
+                        FontSize="11" Padding="8,3"
+                        Margin="0,0,5,0"
+                        Click="MiniToggle_Click"/>
+                <Button Content="⊞"
+                        FontSize="13" Padding="6,3"
+                        ToolTip="Expand to full window"
+                        Click="Expand_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
