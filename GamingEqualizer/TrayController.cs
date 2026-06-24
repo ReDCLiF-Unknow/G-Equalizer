@@ -67,6 +67,15 @@ public class TrayController : IDisposable
 
     public void SetEqState(bool eqOn) => LoadIcon(eqOn);
 
+    public void UpdateTooltip(string preset, bool eqOn, bool boostEnabled, float boostDb)
+    {
+        string status = eqOn ? "ON" : "OFF";
+        string boost  = (boostEnabled && boostDb > 0) ? $" · Boost +{boostDb:F0}dB" : "";
+        // NotifyIcon.Text is capped at 63 chars by Windows
+        string text = $"G Equalizer [{status}] — {preset}{boost}";
+        _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+    }
+
     private void ShowWindow()
     {
         _mainWindow.Show();

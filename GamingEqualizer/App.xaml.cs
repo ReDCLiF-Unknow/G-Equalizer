@@ -12,6 +12,7 @@ public partial class App : System.Windows.Application
 
         var mainWindow = new MainWindow();
         _tray = new TrayController(mainWindow);
+        mainWindow.SetTray(_tray);
 
         bool startMinimized = e.Args.Contains("--minimized");
         if (!startMinimized)

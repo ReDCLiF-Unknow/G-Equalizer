@@ -14,8 +14,8 @@ public partial class CalibrationWizard : Window
     private const int FreqCount   = 7;
     private const float ReferenceDb = -20f;
 
-    // Phase 0 = left ear, Phase 1 = right ear
-    private int _phase = 0;
+    // Phase -1 = reference level step, Phase 0 = left ear, Phase 1 = right ear
+    private int _phase = -1;
     private int _step  = 0;
 
     private readonly float[] _leftThresholds  = new float[FreqCount];
@@ -45,6 +45,12 @@ public partial class CalibrationWizard : Window
 
     private void UpdateStep()
     {
+        if (_phase == -1)
+        {
+            ShowReferenceStep();
+            return;
+        }
+
         bool finished = _phase >= 2;
         if (finished) { ShowResults(); return; }
 
@@ -67,8 +73,64 @@ public partial class CalibrationWizard : Window
         bool isLastOverall = (_phase == 1 && localStep == FreqCount - 1);
         NextButton.Content = isLastOverall ? "Finish" : "Next →";
 
+        ThresholdSlider.Visibility     = Visibility.Visible;
+        ThresholdValueLabel.Visibility = Visibility.Visible;
+        LeftEarPill.Visibility         = Visibility.Visible;
+        RightEarPill.Visibility        = Visibility.Visible;
+
         UpdateEarPills(isLeft);
         PlayTone(CalFrequencies[localStep], isLeft ? -1f : 1f);
+    }
+
+    private void ShowReferenceStep()
+    {
+        StepTitle.Text    = "Set Your Volume";
+        StepSubtitle.Text = "Step 0 of 14 — Reference level";
+
+        InstructionText.Text =
+            "A reference tone is playing through both ears at a fixed level.\n\n" +
+            "Adjust your system volume until the tone is clear and comfortable — " +
+            "not too loud, not too quiet. Keep this volume for the entire calibration.\n\n" +
+            "Click Next when you're ready.";
+
+        FrequencyLabel.Text = "1000 Hz  ·  Reference";
+        NextButton.Content  = "Next →";
+
+        ThresholdSlider.Visibility     = Visibility.Collapsed;
+        ThresholdValueLabel.Visibility = Visibility.Collapsed;
+        LeftEarPill.Visibility         = Visibility.Collapsed;
+        RightEarPill.Visibility        = Visibility.Collapsed;
+
+        // Play 1kHz reference tone centered at a fixed moderate level
+        PlayReferenceTone();
+    }
+
+    private void PlayReferenceTone()
+    {
+        StopTone();
+        try
+        {
+            _signalGen = new SignalGenerator(44100, 1)
+            {
+                Gain      = Math.Pow(10, ReferenceDb / 20.0),
+                Frequency = 1000,
+                Type      = SignalGeneratorType.Sin
+            };
+
+            var panned = new PanningSampleProvider(_signalGen) { Pan = 0f };
+
+            _waveOut = new WaveOutEvent { DesiredLatency = 50 };
+            _waveOut.Init(panned);
+            _waveOut.Play();
+            ErrorBanner.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            StopTone();
+            ErrorText.Text = $"Audio device error: {ex.Message}. Calibration cancelled.";
+            ErrorBanner.Visibility = Visibility.Visible;
+            NextButton.IsEnabled   = false;
+        }
     }
 
     private void UpdateEarPills(bool leftActive)
@@ -150,6 +212,13 @@ public partial class CalibrationWizard : Window
 
     private void NextButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_phase == -1)
+        {
+            _phase = 0;
+            UpdateStep();
+            return;
+        }
+
         float val = (float)ThresholdSlider.Value;
         if (_phase == 0) _leftThresholds[_step]  = val;
         else             _rightThresholds[_step] = val;

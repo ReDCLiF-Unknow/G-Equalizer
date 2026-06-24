@@ -26,7 +26,7 @@ Key features:
 
 ## Current Status
 
-**v2 shipped + post-ship polish applied.** Builds clean (0 errors, 0 warnings).
+**v2.1.0 shipped.** Builds clean (0 errors, 0 warnings).
 
 | Phase | Status |
 |---|---|
@@ -39,6 +39,7 @@ Key features:
 | v2: Feature additions | **Done** |
 | v2: Release build + distribution artifacts | **Done** |
 | Post-ship: Custom icon, titlebar color, sound boost, UX polish | **Done** |
+| v2.1: Calibration reference step, tray tooltip, preset share codes | **Done** |
 
 ---
 
@@ -62,6 +63,7 @@ GamingEqualizer/
   TrayController.cs             NotifyIcon, Toggle/Open/Quit, hide-to-tray
   EQConfigWriter.cs             Apply(bands, boostDb) / ApplyPerEar(left, right, boostDb) / Bypass(), retry + Include fallback
   PresetManager.cs              Loads Presets/*.json, Reload(), falls back to Flat
+  PresetShareCode.cs            Static Encode(float[]) / Decode(string) — 10 floats → URL-safe base64 (~56 chars)
   Logger.cs                     Appends to %AppData%\GamingEqualizer\error.log
   Models/
     AppSettings.cs              Load/save JSON — bands, preset, cal (left/right/avg), onboarding flag, BoostDb, BoostEnabled
@@ -89,8 +91,8 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.0.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
-| `GEqualizer-portable.zip` | 66 MB | Portable ZIP — extract and run, no installer needed |
+| `GEqualizer-Setup-2.1.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
 | `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
 
@@ -99,7 +101,10 @@ All in `dist/`:
 dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ..\dist\app
 ```
 
-> Note: `dist/` artifacts are from v2. Re-publish to pick up post-ship changes (custom icon, boost, titlebar).
+> **Important:** After `dotnet publish`, copy the valid icon before rebuilding the installer — the publish output corrupts `dist/app/app-icon.ico`:
+> ```
+> Copy-Item GamingEqualizer\Assets\app-icon.ico dist\app\app-icon.ico -Force
+> ```
 
 ---
 
@@ -114,6 +119,7 @@ None. All previously known issues are resolved.
 | `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Set programmatically via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
 | White Windows titlebar on all windows | Fixed via `DwmSetWindowAttribute(DWMWA_CAPTION_COLOR)` in `DwmHelper.ApplyDarkTitlebar()` — applied to all windows |
 | Tray icons not appearing (showing generic icon) | Changed from `<Resource>` to `<Content CopyToOutputDirectory>` in .csproj so they're on disk at runtime |
+| `dotnet publish` corrupts `dist/app/app-icon.ico` | Manually copy `Assets/app-icon.ico` → `dist/app/` after every publish, before rebuilding the NSIS installer |
 
 ---
 
@@ -184,6 +190,17 @@ None. All previously known issues are resolved.
 
 ---
 
+## v2.1 Features (this session)
+
+| Feature | Notes |
+|---|---|
+| Calibration reference level warning | New step 0 in `CalibrationWizard` — plays 1kHz tone at fixed `-20 dB`, instructs user to set system volume before calibration begins. Ear pills + slider hidden on this step. `_phase` starts at `-1` and advances to `0` on Next. |
+| Tray tooltip | `TrayController.UpdateTooltip()` — called from `MainWindow.RefreshTrayTooltip()` after every EQ toggle and `ApplyCurrentGains()`. Format: `"G Equalizer [ON] — FPS · Boost +7dB"`. `MainWindow` holds a `_tray` ref set via `SetTray()` from `App.xaml.cs`. |
+| Preset share codes | `PresetShareCode.cs` — `Encode`: 10×float32 LE → URL-safe base64 (~56 chars). `Decode`: validates length (40 bytes), clamps to ±12 dB. Two new buttons in Settings PRESETS section: Copy (to clipboard) and Paste (decode → `SavePresetDialog` → save JSON → sets `ImportedPreset` → MainWindow picks up on Settings close). |
+| Installer versioned to 2.1.0 | `installer.nsi` `APP_VERSION` updated. Installer EXE icon set via top-level `Icon` directive + `MUI_ICON`/`MUI_UNICON`. |
+
+---
+
 ## Out of Scope
 
 - Mac / Linux support
@@ -197,14 +214,14 @@ None. All previously known issues are resolved.
 
 Full spec: [v3-concept.md](v3-concept.md)
 
-| Feature | Priority | Complexity | Notes |
-|---|---|---|---|
-| Tray tooltip | High | Low | Show current preset + boost state on hover (e.g. "FPS · Boost +7dB") |
-| Calibration reference level warning | High | Low | Add a pre-wizard check tone step so users set volume correctly first |
-| Preset share codes (base64 export/import) | High | Medium | Encode float[10] → short base64 string for copy/paste sharing |
-| AutoEQ headphone correction import | Medium | Medium | Parse parametric `.txt`, blend into EQ output |
-| Calibration re-test individual bands | Medium | Medium | Results screen gets per-band Re-test buttons |
-| Auto-preset switching | Low | High | **Off by default.** User opts in via Settings toggle. Polls foreground process, maps exe → preset. |
-| Visualizer color mode toggle | Low | Low | Solid color or peak-glow alternative to gradient |
+| Feature | Priority | Complexity | Status | Notes |
+|---|---|---|---|---|
+| Tray tooltip | High | Low | **Done** | Shows "G Equalizer [ON] — FPS · Boost +7dB" on hover; updates on toggle/preset/boost change |
+| Calibration reference level warning | High | Low | **Done** | Step 0 in CalibrationWizard: fixed 1kHz reference tone, ask user to set system volume before starting |
+| Preset share codes (base64 export/import) | High | Medium | **Done** | `PresetShareCode.cs` — Encode/Decode. Copy/Paste buttons in Settings → PRESETS section |
+| AutoEQ headphone correction import | Medium | Medium | — | Parse parametric `.txt`, blend into EQ output |
+| Calibration re-test individual bands | Medium | Medium | — | Results screen gets per-band Re-test buttons |
+| Auto-preset switching | Low | High | — | **Off by default.** User opts in via Settings toggle. Polls foreground process, maps exe → preset. |
+| Visualizer color mode toggle | Low | Low | — | Solid color or peak-glow alternative to gradient |
 
-**Where to start next session:** Tray tooltip or preset share codes — both self-contained and high value.
+**Where to start next session:** AutoEQ import or calibration re-test — next highest-value items.

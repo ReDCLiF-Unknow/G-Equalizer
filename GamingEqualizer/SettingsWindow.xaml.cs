@@ -200,6 +200,53 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void CopyShareCode_Click(object sender, RoutedEventArgs e)
+    {
+        string code = PresetShareCode.Encode(_settings.BandGains);
+        System.Windows.Clipboard.SetText(code);
+        MessageBox.Show($"Share code copied to clipboard:\n\n{code}", "Share Code Copied",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void PasteShareCode_Click(object sender, RoutedEventArgs e)
+    {
+        string text = System.Windows.Clipboard.GetText().Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            MessageBox.Show("Clipboard is empty.", "Paste Share Code",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        float[]? bands = PresetShareCode.Decode(text);
+        if (bands == null)
+        {
+            MessageBox.Show("Clipboard does not contain a valid share code.", "Paste Share Code",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var existingNames = _presetManager.Presets.Select(p => p.Name);
+        var dlg = new SavePresetDialog(existingNames) { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.PresetName == null) return;
+
+        try
+        {
+            Directory.CreateDirectory(PresetsDir);
+            var preset = new Models.Preset { Name = dlg.PresetName, Bands = bands };
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(preset, Newtonsoft.Json.Formatting.Indented);
+            File.WriteAllText(Path.Combine(PresetsDir, $"{dlg.PresetName}.json"), json);
+            ImportedPreset = preset;
+            MessageBox.Show($"Preset '{dlg.PresetName}' added. Close Settings to apply.", "Preset Added",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to save preset:\n{ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private static bool IsStartupRegistered()
     {
         try

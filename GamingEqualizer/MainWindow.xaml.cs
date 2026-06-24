@@ -50,8 +50,11 @@ public partial class MainWindow : Window
     private readonly EQConfigWriter _eqWriter      = new();
     private readonly PresetManager  _presetManager = new();
 
-    private HwndSource? _hwndSource;
-    private MiniWindow? _miniWindow;
+    private HwndSource?    _hwndSource;
+    private MiniWindow?    _miniWindow;
+    private TrayController? _tray;
+
+    public void SetTray(TrayController tray) => _tray = tray;
 
     private bool _suppressPresetChange = false;
     private bool _suppressSliderChange = false;
@@ -459,6 +462,14 @@ public partial class MainWindow : Window
             _pulseTimer?.Stop();
             if (writeConfig) SafeBypass();
         }
+
+        RefreshTrayTooltip();
+    }
+
+    private void RefreshTrayTooltip()
+    {
+        string preset = string.IsNullOrEmpty(_settings.ActivePreset) ? "Custom" : _settings.ActivePreset;
+        _tray?.UpdateTooltip(preset, _settings.EqEnabled, _settings.BoostEnabled, _settings.BoostDb);
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -534,6 +545,7 @@ public partial class MainWindow : Window
             HideErrorBanner();
         }
         catch (Exception ex) { ShowErrorBanner($"Failed to apply EQ: {ex.Message}"); }
+        RefreshTrayTooltip();
     }
 
     // Adds the per-ear deviation (calSide - calAvg) on top of the current preset/slider gains.
