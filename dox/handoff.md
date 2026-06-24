@@ -123,7 +123,7 @@ None for v1. All previously known issues are resolved:
 
 **Theme:** Full gaming aesthetic redesign — purple→pink gradient palette (Razer/ROG style), glowing slider thumbs, custom styled controls throughout.
 
-**Concept file:** [v2-concept.html](v2-concept.html) — open in any browser to preview the design.
+**Concept file:** [v2-concept.md](v2-concept.md) — full design spec for v2.
 
 Key changes planned for v2:
 
