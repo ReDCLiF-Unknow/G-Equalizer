@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-06-25 (updated)
+**Date:** 2026-06-25 (v2.4.0)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -27,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v2.3.0 released.** Installer and portable ZIP in `dist/`.
+**v2.4.0 released.** Installer and portable ZIP in `dist/`.
 
 | Phase | Status |
 |---|---|
@@ -44,6 +44,7 @@ Key features:
 | v2.2: AutoEQ import, calibration re-test, visualizer color modes | **Done** |
 | v2.2: Button color fix (deep violet), release build | **Done** |
 | v2.3: Auto-preset switching, scrollbar theme, Settings polish | **Done** |
+| v2.4: Settings inline page, chip color fix, button sizing | **Done** |
 
 ---
 
@@ -56,12 +57,12 @@ GamingEqualizer/
   GlobalUsings.cs               Resolves WPF vs WinForms namespace conflicts
   DwmHelper.cs                  Static helper — ApplyDarkTitlebar(window) via DwmSetWindowAttribute
   App.xaml / App.xaml.cs        App entry, dark theme resource dict, tray init, first-run onboarding trigger
-  MainWindow.xaml / .cs         10-band EQ UI, preset chips, toggle, visualizer, live mode, mini mode, band tooltips, boost button
+  MainWindow.xaml / .cs         10-band EQ UI, preset chips, toggle, visualizer, live mode, mini mode, band tooltips, boost button + inline settings panel (all settings logic lives here; SettingsWindow deleted in v2.4)
   MiniWindow.xaml / .cs         Always-on-top compact widget (500×58px, draggable)
   OnboardingWizard.xaml / .cs   4-step first-run walkthrough (Welcome / Presets / Hotkeys / Calibration)
   SavePresetDialog.xaml / .cs   Name-input dialog for saving custom presets
   CalibrationWizard.xaml / .cs  Per-ear hearing calibration: 14 steps (7 left + 7 right), panned sine tones
-  SettingsWindow.xaml / .cs     Settings: launch-with-Windows, default preset, re-calibrate, import/export, boost slider
+  ProcessMappingRow.cs          Simple data class for auto-preset exe→preset mapping rows (was inner class in SettingsWindow)
   HotkeyManager.cs              RegisterHotKey/UnregisterHotKey P/Invoke wrapper
   AudioSpectrumAnalyzer.cs      WasapiLoopbackCapture + FFT → 80-bar spectrum data
   TrayController.cs             NotifyIcon, Toggle/Open/Quit, hide-to-tray
@@ -96,7 +97,7 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.3.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `GEqualizer-Setup-2.4.0.exe` | 49 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
 | `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
 | `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
@@ -146,7 +147,7 @@ None. All previously known issues are resolved.
 - **Per-ear calibration:** Each ear tested separately (7 frequencies × 2 ears = 14 steps). Signal is panned hard left/right via `PanningSampleProvider(monoSignalGenerator)`. Results stored as `LastCalibrationLeft[10]` + `LastCalibrationRight[10]`. Average stored in `LastCalibration[10]` for slider display. `EQConfigWriter.ApplyPerEar` writes `Channel: L` / `Channel: R` / `Channel: ALL` blocks. When the user subsequently switches presets, `BlendWithPreset` adds the per-ear deviation `(calSide[i] - calAvg[i])` on top of the preset gains — so calibration persists as a transparent hearing-correction layer across preset changes.
 - **Onboarding:** `AppSettings.HasCompletedOnboarding` (default `false`). `App.xaml.cs` shows `OnboardingWizard` after `MainWindow` is shown on first run. If the user opts in to calibration on the final step, `MainWindow.OpenCalibrationWizard()` is called immediately after.
 - **State storage:** `%AppData%\GamingEqualizer\AppSettings.json` — active preset, on/off state, band gains, launch-with-Windows flag, per-ear calibration, onboarding flag, `BoostDb`, `BoostEnabled`.
-- **Sound Boost:** `BoostDb` (0–20 dB, default 0) folds into the EqualizerAPO `Preamp:` line as `Preamp: (-6 + boostDb) dB`. The `-6 dB` base headroom is always present to prevent clipping. `EQConfigWriter.Apply` and `ApplyPerEar` both accept `boostDb = 0f` as a default. `BoostEnabled` gates whether boost is applied — toggle button in titlebar, checkbox + slider in Settings. Settings notifies MainWindow via `onBoostChanged` callback (passed at construction) so EQ re-applies in real time while the slider is dragged.
+- **Sound Boost:** `BoostDb` (0–20 dB, default 0) folds into the EqualizerAPO `Preamp:` line as `Preamp: (-6 + boostDb) dB`. The `-6 dB` base headroom is always present to prevent clipping. `EQConfigWriter.Apply` and `ApplyPerEar` both accept `boostDb = 0f` as a default. `BoostEnabled` gates whether boost is applied — toggle button in titlebar, checkbox + slider in the inline Settings panel. Since Settings is now inline in MainWindow, boost changes call `RefreshBoostButton()` and `ApplyCurrentGains()` directly (no callback needed).
 - **Titlebar color:** All windows call `DwmHelper.ApplyDarkTitlebar(this)` in `OnSourceInitialized`. The color `#1a0533` is stored as COLORREF `0x00330519` in `DwmHelper.cs`. Windows 11 only — on older Windows it silently no-ops.
 - **App icon:** Set programmatically in `MainWindow` constructor via `BitmapFrame.Create("pack://application:,,,/Assets/app-icon.ico")` — avoids the .NET 10 XAML crash. `<ApplicationIcon>` in .csproj handles the exe/taskbar icon. Tray icons loaded from file path (must be `<Content>` not `<Resource>` in .csproj).
 - **Custom icon design:** Shield shape with 7 EQ bars, purple→pink gradient (`#7c3aed → #f472b6`), dark background `#16052E`. Generated with PowerShell + `System.Drawing` — see the generation script in the session history if you need to regenerate. `app-icon-backup.ico` is the original.
@@ -229,6 +230,16 @@ None. All previously known issues are resolved.
 
 ---
 
+## v2.4 Features (this session)
+
+| Feature | Notes |
+|---|---|
+| Settings as inline page | `SettingsWindow.xaml/.cs` deleted. All settings content embedded as a collapsible `Border` (rows 2–4 of MainWindow Grid). "⚙ Settings" button toggles to "← Back". `PopulateSettingsPanel()` initialises state on open. All event handlers and logic moved into `MainWindow.xaml.cs`. `ProcessMappingRow` extracted to its own file. |
+| Preset chip color fix | `ChipStyle` `IsChecked` trigger background changed from `#7c3aed1a` (10% alpha — Windows accent bled through as green) to solid `#2d1060`. Border changed to solid `#7c3aed`. System accent color can no longer show through. |
+| Save/Calibrate button sizing | Added `Height="26" Padding="10,0" FontSize="11" VerticalAlignment="Center"` to the Save and Calibrate buttons in the preset chip row so they sit flush with the row height rather than overflowing it. |
+
+---
+
 ## Out of Scope
 
 - Mac / Linux support
@@ -252,4 +263,4 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
 
-**Where to start next session:** All v3 features are complete. Options: plan v4, or ship as-is. No known bugs or outstanding work.
+**Where to start next session:** All v3 features are complete and v2.4.0 is shipped. Options: plan v4, or continue UX polish. No known bugs or outstanding work.

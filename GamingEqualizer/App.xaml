@@ -240,8 +240,8 @@
                                     <Setter Property="Foreground" Value="#8877cc"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#7c3aed99"/>
-                                    <Setter TargetName="Bd" Property="Background"  Value="#7c3aed1a"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#7c3aed"/>
+                                    <Setter TargetName="Bd" Property="Background"  Value="#2d1060"/>
                                     <Setter Property="Foreground" Value="#c4b5fd"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
