@@ -27,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v2.2.0 released.** Installer and portable ZIP in `dist/`.
+**v2.3.0 released.** Installer and portable ZIP in `dist/`.
 
 | Phase | Status |
 |---|---|
@@ -43,6 +43,7 @@ Key features:
 | v2.1: Calibration reference step, tray tooltip, preset share codes | **Done** |
 | v2.2: AutoEQ import, calibration re-test, visualizer color modes | **Done** |
 | v2.2: Button color fix (deep violet), release build | **Done** |
+| v2.3: Auto-preset switching, scrollbar theme, Settings polish | **Done** |
 
 ---
 
@@ -95,7 +96,7 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.2.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `GEqualizer-Setup-2.3.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
 | `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
 | `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
@@ -217,6 +218,17 @@ None. All previously known issues are resolved.
 
 ---
 
+## v2.3 Features (this session)
+
+| Feature | Notes |
+|---|---|
+| Button color (deep violet) | `PrimaryButtonStyle` rebuilt with explicit `ControlTemplate` — deep violet `#5b21b6` bg, `#7c3aed` border, lightens on hover, darkens on press. System accent color can no longer bleed through. |
+| Auto-preset switching | Settings → AUTO-PRESET SWITCHING section. Checkbox to opt in. `DispatcherTimer` polls `GetForegroundWindow` → `GetWindowThreadProcessId` → `Process.GetProcessById` every 2s. Maps exe name → preset via `AppSettings.ProcessPresetMap` (Dictionary with `OrdinalIgnoreCase`). Editable in Settings: add row (TextBox + ComboBox + ＋ Add), ✕ remove per row. Default mappings: cs2.exe/r5apex.exe/VALORANT/RainbowSix → FPS, Spotify → Music. Tray tooltip refreshes on switch. OrdinalIgnoreCase comparer re-applied after JSON deserialization (Newtonsoft loses it). |
+| Scrollbar theme | Custom `ScrollBar` style in `App.xaml` — 6px wide, dark `#0d0d1a` track, `#7c3aed` purple thumb, `#a78bfa` on hover, `#f472b6` pink while dragging. Applied app-wide. |
+| Settings window polish | Height 570 → 720px. ScrollViewer `Padding="0,0,10,0"` so scrollbar doesn't overlap content. `NewExeBox` placeholder (`GotFocus`/`LostFocus` handlers, dim text). `IconButtonStyle` for ✕ remove buttons — borderless, dim by default, pink on hover. |
+
+---
+
 ## Out of Scope
 
 - Mac / Linux support
@@ -238,6 +250,6 @@ Full spec: [v3-concept.md](v3-concept.md)
 | AutoEQ headphone correction import | Medium | Medium | **Done** | `AutoEQImporter.cs`. "⬇ Import AutoEQ (.txt)" in Settings → PRESETS |
 | Calibration re-test individual bands | Medium | Medium | **Done** | Results screen grid with ↻ L / ↻ R per frequency |
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
-| Auto-preset switching | Low | High | — | **Off by default.** User opts in via Settings toggle. Polls foreground process, maps exe → preset. |
+| Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
 
-**Where to start next session:** Implement auto-preset switching (the only remaining v3 item). Settings toggle to opt in, `DispatcherTimer` polls `GetForegroundWindow` → `GetWindowThreadProcessId` → process name, maps exe → preset name from a config table (editable in Settings).
+**Where to start next session:** All v3 features are complete. Options: plan v4, or ship as-is. No known bugs or outstanding work.
