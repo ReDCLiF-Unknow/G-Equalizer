@@ -53,6 +53,54 @@
                 </Setter>
             </Style>
 
+            <!-- ── ScrollBar ──────────────────────────────────────────── -->
+            <Style TargetType="ScrollBar">
+                <Setter Property="Width"      Value="6"/>
+                <Setter Property="MinWidth"   Value="6"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid x:Name="Root" Width="6">
+                                <Border Background="#0d0d1a" CornerRadius="3"/>
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                      Opacity="0"
+                                                      Focusable="False"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="Bd"
+                                                            Background="#7c3aed"
+                                                            CornerRadius="3"
+                                                            Margin="0,2"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#a78bfa"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsDragging" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#f472b6"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                      Opacity="0"
+                                                      Focusable="False"/>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ── Button base ────────────────────────────────────────── -->
             <Style TargetType="Button">
                 <Setter Property="Background"       Value="#0d0d1a"/>
@@ -91,12 +139,42 @@
                 </Setter>
             </Style>
 
-            <!-- Primary button (purple tint) -->
-            <Style x:Key="PrimaryButtonStyle" TargetType="Button"
-                   BasedOn="{StaticResource {x:Type Button}}">
-                <Setter Property="Background"  Value="#7c3aed14"/>
-                <Setter Property="BorderBrush" Value="#7c3aed66"/>
-                <Setter Property="Foreground"  Value="{StaticResource AccentTextBrush}"/>
+            <!-- Primary button (deep violet) -->
+            <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+                <Setter Property="Background"      Value="#5b21b6"/>
+                <Setter Property="BorderBrush"     Value="#7c3aed"/>
+                <Setter Property="Foreground"      Value="#ede9fe"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding"         Value="12,6"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="FontSize"        Value="12"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background"  Value="#6d28d9"/>
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#a78bfa"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#4c1d95"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.35"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- Danger button (pink tint) -->
@@ -105,6 +183,33 @@
                 <Setter Property="Background"  Value="#db277710"/>
                 <Setter Property="BorderBrush" Value="#db277766"/>
                 <Setter Property="Foreground"  Value="#f472b6"/>
+            </Style>
+
+            <!-- Icon/remove button (borderless, small) -->
+            <Style x:Key="IconButtonStyle" TargetType="Button">
+                <Setter Property="Background"      Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground"      Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Padding"         Value="0"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="3"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="#f472b6"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Foreground" Value="#db2777"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- ── Preset chip (ToggleButton) ─────────────────────────── -->

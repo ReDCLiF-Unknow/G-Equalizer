@@ -55,8 +55,8 @@
             </StackPanel>
         </Border>
 
-        <!-- Instructions -->
-        <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <!-- Wizard panel (active during calibration steps) -->
+        <StackPanel x:Name="WizardPanel" Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center">
             <TextBlock x:Name="InstructionText"
                        TextWrapping="Wrap"
                        HorizontalAlignment="Center"
@@ -87,6 +87,14 @@
                        FontSize="13"
                        Margin="0,8,0,0"/>
         </StackPanel>
+
+        <!-- Results panel (shown after calibration completes) -->
+        <ScrollViewer x:Name="ResultsPanel"
+                      Grid.Row="2"
+                      Visibility="Collapsed"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="ResultsStack" Margin="0,4,0,0"/>
+        </ScrollViewer>
 
         <!-- Error area -->
         <Border x:Name="ErrorBanner"

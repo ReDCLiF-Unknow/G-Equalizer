@@ -21,6 +21,10 @@ public partial class CalibrationWizard : Window
     private readonly float[] _leftThresholds  = new float[FreqCount];
     private readonly float[] _rightThresholds = new float[FreqCount];
 
+    // Re-test state: when retesting a single band, these track which one
+    private int _retestStep  = 0;   // 0-6 index into CalFrequencies
+    private int _retestPhase = 0;   // 0=left, 1=right
+
     private WaveOutEvent?      _waveOut;
     private SignalGenerator?   _signalGen;
 
@@ -234,6 +238,17 @@ public partial class CalibrationWizard : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
+        // During a re-test, Cancel goes back to the results screen rather than closing
+        if (ResultsPanel.Visibility == Visibility.Collapsed && ResultGains != null)
+        {
+            StopTone();
+            NextButton.Click -= RetestDone_Click;
+            NextButton.Click -= ApplyButton_Click;
+            NextButton.Click += NextButton_Click;
+            ShowResults();
+            return;
+        }
+
         StopTone();
         DialogResult = false;
         Close();
@@ -246,22 +261,178 @@ public partial class CalibrationWizard : Window
         ResultGainsLeft  = ComputeGains(_leftThresholds);
         ResultGainsRight = ComputeGains(_rightThresholds);
 
-        // Average of L+R for slider display
         ResultGains = new float[10];
         for (int i = 0; i < 10; i++)
             ResultGains[i] = (ResultGainsLeft[i] + ResultGainsRight[i]) / 2f;
 
-        StepTitle.Text       = "Calibration Complete";
-        StepSubtitle.Text    = "Your personal per-ear EQ curve has been generated.";
-        FrequencyLabel.Text  = "";
-        InstructionText.Text = "Click Apply to use this curve, or Cancel to discard.";
-        LeftEarPill.Visibility  = Visibility.Collapsed;
-        RightEarPill.Visibility = Visibility.Collapsed;
-        ThresholdSlider.Visibility      = Visibility.Collapsed;
-        ThresholdValueLabel.Visibility  = Visibility.Collapsed;
+        StepTitle.Text    = "Calibration Complete";
+        StepSubtitle.Text = "Review your results below. Re-test any band you want to redo.";
+
+        LeftEarPill.Visibility         = Visibility.Collapsed;
+        RightEarPill.Visibility        = Visibility.Collapsed;
+        WizardPanel.Visibility         = Visibility.Collapsed;
+        ResultsPanel.Visibility        = Visibility.Visible;
+
+        BuildResultsGrid();
+
         NextButton.Content = "Apply";
         NextButton.Click  -= NextButton_Click;
+        NextButton.Click  -= RetestDone_Click;
         NextButton.Click  += ApplyButton_Click;
+    }
+
+    private void BuildResultsGrid()
+    {
+        ResultsStack.Children.Clear();
+
+        // Header row
+        var header = new Grid();
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+        header.Margin = new Thickness(0, 0, 0, 6);
+
+        void AddHeaderCell(string text, int col)
+        {
+            var tb = new TextBlock
+            {
+                Text       = text,
+                FontSize   = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = (System.Windows.Media.Brush)FindResource("MutedTextBrush"),
+                HorizontalAlignment = col == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Center
+            };
+            Grid.SetColumn(tb, col);
+            header.Children.Add(tb);
+        }
+        AddHeaderCell("FREQ", 0);
+        AddHeaderCell("LEFT", 1);
+        AddHeaderCell("", 2);
+        AddHeaderCell("RIGHT", 3);
+        AddHeaderCell("", 4);
+        ResultsStack.Children.Add(header);
+
+        var accentBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        var textBrush   = (System.Windows.Media.Brush)FindResource("TextBrush");
+        var dimBrush    = (System.Windows.Media.Brush)FindResource("TextDimBrush");
+
+        for (int i = 0; i < FreqCount; i++)
+        {
+            int capturedI = i;
+
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+
+            // Frequency label
+            var freqLabel = new TextBlock
+            {
+                Text       = $"{CalFrequencies[i]} Hz",
+                FontSize   = 13,
+                FontWeight = FontWeights.Bold,
+                Foreground = accentBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(freqLabel, 0);
+            row.Children.Add(freqLabel);
+
+            // Left threshold value
+            var leftVal = new TextBlock
+            {
+                Text       = $"{_leftThresholds[i]:F0} dB",
+                FontSize   = 12,
+                Foreground = textBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            Grid.SetColumn(leftVal, 1);
+            row.Children.Add(leftVal);
+
+            // Left re-test button
+            var retestL = new System.Windows.Controls.Button
+            {
+                Content             = "↻ L",
+                FontSize            = 11,
+                Padding             = new Thickness(6, 3, 6, 3),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            retestL.Click += (_, _) => StartRetest(capturedI, isLeft: true);
+            Grid.SetColumn(retestL, 2);
+            row.Children.Add(retestL);
+
+            // Right threshold value
+            var rightVal = new TextBlock
+            {
+                Text       = $"{_rightThresholds[i]:F0} dB",
+                FontSize   = 12,
+                Foreground = textBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            Grid.SetColumn(rightVal, 3);
+            row.Children.Add(rightVal);
+
+            // Right re-test button
+            var retestR = new System.Windows.Controls.Button
+            {
+                Content             = "↻ R",
+                FontSize            = 11,
+                Padding             = new Thickness(6, 3, 6, 3),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment   = VerticalAlignment.Center
+            };
+            retestR.Click += (_, _) => StartRetest(capturedI, isLeft: false);
+            Grid.SetColumn(retestR, 4);
+            row.Children.Add(retestR);
+
+            ResultsStack.Children.Add(row);
+        }
+    }
+
+    private void StartRetest(int freqIndex, bool isLeft)
+    {
+        _retestStep  = freqIndex;
+        _retestPhase = isLeft ? 0 : 1;
+
+        ResultsPanel.Visibility = Visibility.Collapsed;
+        WizardPanel.Visibility  = Visibility.Visible;
+        LeftEarPill.Visibility  = Visibility.Visible;
+        RightEarPill.Visibility = Visibility.Visible;
+
+        StepTitle.Text    = "Re-test";
+        StepSubtitle.Text = $"{(isLeft ? "Left" : "Right")} ear — {CalFrequencies[freqIndex]} Hz";
+        InstructionText.Text = isLeft
+            ? "A tone will play in your LEFT ear only.\nDrag the slider until you can just barely hear it, then click Done."
+            : "A tone will play in your RIGHT ear only.\nDrag the slider until you can just barely hear it, then click Done.";
+
+        FrequencyLabel.Text      = $"{CalFrequencies[freqIndex]} Hz";
+        ThresholdSlider.Value    = isLeft ? _leftThresholds[freqIndex] : _rightThresholds[freqIndex];
+        ThresholdValueLabel.Text = $"{ThresholdSlider.Value:F0} dB";
+
+        ThresholdSlider.Visibility     = Visibility.Visible;
+        ThresholdValueLabel.Visibility = Visibility.Visible;
+        UpdateEarPills(isLeft);
+        PlayTone(CalFrequencies[freqIndex], isLeft ? -1f : 1f);
+
+        NextButton.Content = "Done";
+        NextButton.Click  -= NextButton_Click;
+        NextButton.Click  -= ApplyButton_Click;
+        NextButton.Click  += RetestDone_Click;
+    }
+
+    private void RetestDone_Click(object sender, RoutedEventArgs e)
+    {
+        float val = (float)ThresholdSlider.Value;
+        if (_retestPhase == 0) _leftThresholds[_retestStep]  = val;
+        else                   _rightThresholds[_retestStep] = val;
+
+        ShowResults();
     }
 
     private void ApplyButton_Click(object sender, RoutedEventArgs e)

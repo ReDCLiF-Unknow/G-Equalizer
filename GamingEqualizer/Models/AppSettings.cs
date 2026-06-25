@@ -15,6 +15,17 @@ public class AppSettings
     public bool HasCompletedOnboarding { get; set; } = false;
     public float BoostDb { get; set; } = 0f;
     public bool BoostEnabled { get; set; } = false;
+    // 0 = Gradient, 1 = Solid, 2 = Peak Glow
+    public int VizColorMode { get; set; } = 0;
+    public bool AutoPresetEnabled { get; set; } = false;
+    public Dictionary<string, string> ProcessPresetMap { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["cs2.exe"]                        = "FPS",
+        ["r5apex.exe"]                     = "FPS",
+        ["VALORANT-Win64-Shipping.exe"]    = "FPS",
+        ["RainbowSix.exe"]                 = "FPS",
+        ["Spotify.exe"]                    = "Music",
+    };
 
     private static readonly string SettingsDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GamingEqualizer");
@@ -26,8 +37,12 @@ public class AppSettings
         {
             if (File.Exists(SettingsPath))
             {
-                var json = File.ReadAllText(SettingsPath);
-                return JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
+                var json     = File.ReadAllText(SettingsPath);
+                var settings = JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
+                // Re-apply OrdinalIgnoreCase comparer lost during JSON deserialization
+                settings.ProcessPresetMap = new Dictionary<string, string>(
+                    settings.ProcessPresetMap, StringComparer.OrdinalIgnoreCase);
+                return settings;
             }
         }
         catch (Exception ex)

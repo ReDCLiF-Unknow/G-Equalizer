@@ -16,13 +16,18 @@ public partial class SavePresetDialog : Window
         DwmHelper.ApplyDarkTitlebar(this);
     }
 
-    public SavePresetDialog(IEnumerable<string> existingNames)
+    public SavePresetDialog(IEnumerable<string> existingNames, string? suggestedName = null)
     {
         InitializeComponent();
         _existingNames = existingNames;
         NameBox.TextChanged += (_, _) =>
             PlaceholderText.Visibility = string.IsNullOrEmpty(NameBox.Text)
                 ? Visibility.Visible : Visibility.Collapsed;
+        if (!string.IsNullOrEmpty(suggestedName))
+        {
+            NameBox.Text = suggestedName;
+            PlaceholderText.Visibility = Visibility.Collapsed;
+        }
         NameBox.Focus();
     }
 

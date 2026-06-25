@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-06-24
+**Date:** 2026-06-25 (updated)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -14,8 +14,9 @@ Key features:
 - 10-band EQ (32Hz–16kHz, ±12 dB per band) with per-band tooltips; double-click any slider to reset to 0 dB
 - On/off toggle from the app or system tray
 - Gaming presets: FPS, RPG, Cinematic, Music, Flat + custom presets (save/import/export)
-- Per-ear hearing calibration wizard (left/right separately via NAudio panning + sine tones)
-- Real-time frequency visualizer (80-bar WASAPI loopback + FFT, or EQ-mode animation)
+- Per-ear hearing calibration wizard (left/right separately via NAudio panning + sine tones); per-band re-test on results screen
+- Real-time frequency visualizer (80-bar WASAPI loopback + FFT, or EQ-mode animation); 3 color modes: Gradient / Solid / Peak Glow
+- AutoEQ headphone correction import (parametric .txt → blended 10-band preset)
 - Mini / compact always-on-top widget (500×58 px)
 - Global hotkeys: Ctrl+Alt+E (toggle), Ctrl+Alt+P (cycle preset)
 - First-run onboarding walkthrough (4-step modal)
@@ -26,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v2.1.0 shipped.** Builds clean (0 errors, 0 warnings).
+**v2.2.0 released.** Installer and portable ZIP in `dist/`.
 
 | Phase | Status |
 |---|---|
@@ -40,6 +41,8 @@ Key features:
 | v2: Release build + distribution artifacts | **Done** |
 | Post-ship: Custom icon, titlebar color, sound boost, UX polish | **Done** |
 | v2.1: Calibration reference step, tray tooltip, preset share codes | **Done** |
+| v2.2: AutoEQ import, calibration re-test, visualizer color modes | **Done** |
+| v2.2: Button color fix (deep violet), release build | **Done** |
 
 ---
 
@@ -64,6 +67,7 @@ GamingEqualizer/
   EQConfigWriter.cs             Apply(bands, boostDb) / ApplyPerEar(left, right, boostDb) / Bypass(), retry + Include fallback
   PresetManager.cs              Loads Presets/*.json, Reload(), falls back to Flat
   PresetShareCode.cs            Static Encode(float[]) / Decode(string) — 10 floats → URL-safe base64 (~56 chars)
+  AutoEQImporter.cs             Static Import(filePath) — parses AutoEQ parametric .txt, evaluates each peaking filter at our 10 band freqs, returns float[10]
   Logger.cs                     Appends to %AppData%\GamingEqualizer\error.log
   Models/
     AppSettings.cs              Load/save JSON — bands, preset, cal (left/right/avg), onboarding flag, BoostDb, BoostEnabled
@@ -78,7 +82,7 @@ GamingEqualizer/
     tray-icon-off.ico           Shield icon, desaturated gray — tray when EQ is disabled
 
 %AppData%\GamingEqualizer\  (runtime, not in repo)
-  AppSettings.json              Includes LastCalibrationLeft / LastCalibrationRight (per-ear) + HasCompletedOnboarding + BoostDb + BoostEnabled
+  AppSettings.json              Includes LastCalibrationLeft / LastCalibrationRight (per-ear) + HasCompletedOnboarding + BoostDb + BoostEnabled + VizColorMode
   HearingProfile.json
   error.log
 ```
@@ -91,7 +95,7 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.1.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `GEqualizer-Setup-2.2.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
 | `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
 | `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
@@ -149,6 +153,7 @@ None. All previously known issues are resolved.
 - **Error policy:** Config write failures show an error banner and revert; corrupted JSON files are skipped and logged to `error.log`; NAudio device failure cancels the calibration wizard with a clear message.
 - **WPF + WinForms coexistence:** `UseWindowsForms=true` is needed for `NotifyIcon`. All ambiguities (`Application`, `Orientation`, `HorizontalAlignment`, `OpenFileDialog`, `SaveFileDialog`, `Button`, etc.) are resolved in `GlobalUsings.cs`. File-local aliases (`WpfColor`, `WpfRect`, `WpfEllipse`, `WpfButton`) handle per-file conflicts — do NOT use plain `Color` or `Point` without qualifying the namespace.
 - **Visualizer array size:** `_vizCurrent` and `_vizTarget` are `double[80]` (one per bar). In EQ mode, `SetVizTargets()` interpolates from 10 band gains → 80 bars. In live mode, `AudioSpectrumAnalyzer` writes all 80 directly from FFT. Do not shrink these back to 10.
+- **Visualizer color modes:** `_vizBrushes[80]` holds `SolidColorBrush` refs (one per bar) so color can be mutated without recreating objects. Gradient/Solid modes set colors once in `ApplyVizColorMode()`. Peak Glow updates `.Color` per-frame in `PositionVizBars()` based on bar height. Mode stored in `AppSettings.VizColorMode` (0/1/2). `VizBarColor(barIndex, intensity, t)` dispatches to the right color formula.
 - **Global hotkeys:** Registered in `OnSourceInitialized` via `HotkeyManager`, unregistered in `OnClosed`. Ctrl+Alt+E = toggle, Ctrl+Alt+P = cycle preset. If hotkey registration fails silently (another app owns the combo), no error is shown.
 - **Mini window:** `MiniWindow` is non-modal, shares the same `AppSettings` + `PresetManager` references as `MainWindow`. All state mutations (toggle, preset click) route back through `MainWindow` methods via delegates. `RefreshUI()` must be called on `MiniWindow` after any state change to keep it in sync.
 - **Band tooltips:** `BandTooltips[10]` array in `MainWindow`. Set as `ToolTip` on the `StackPanel` column for each band — covers gain label, slider canvas, and freq label. No extra visual elements needed.
@@ -201,6 +206,17 @@ None. All previously known issues are resolved.
 
 ---
 
+## v2.2 Features (this session)
+
+| Feature | Notes |
+|---|---|
+| AutoEQ headphone correction import | `AutoEQImporter.cs` — parses AutoEQ parametric `.txt` (peaking filters only; shelves skipped). For each of our 10 fixed band freqs, sums gain contributions from all filters via `G / (1 + (Q × (f/fc − fc/f))²)`. Clamped to ±12 dB. "⬇ Import AutoEQ (.txt)" button in Settings → HEADPHONE CORRECTION section, opens file picker, prompts for preset name (pre-filled from filename) via `SavePresetDialog`, saves JSON, sets `ImportedPreset` — picked up by MainWindow on Settings close. |
+| Calibration per-band re-test | Results screen replaced with a 5-column grid: Freq \| Left dB \| ↻ L \| Right dB \| ↻ R. Each ↻ button enters single-step re-test mode for that frequency × ear — plays tone, user adjusts slider, "Done" saves just that threshold and refreshes the results grid. Full calibration not needed. |
+| Visualizer color modes | 3 modes cycled by "◈" button next to LIVE in the visualizer header. **Gradient** (default): purple→pink across 80 bars. **Solid**: flat `#7c3aed` accent. **Peak Glow**: bars interpolate dark→gradient color→white based on bar height. Mode persisted in `AppSettings.VizColorMode`. Static modes (Gradient/Solid) set brushes once; Peak Glow updates `SolidColorBrush.Color` per-frame in `PositionVizBars`. |
+| Button color fix | `PrimaryButtonStyle` in `App.xaml` changed from near-transparent purple (`#7c3aed14`) to solid dark purple (`#3b1f7a` bg / `#7c3aed` border / `#e0d4ff` text). The transparent style was picking up the user's Windows system accent color (green), causing Save, Calibrate, ENABLE, and other primary buttons to render green instead of purple. |
+
+---
+
 ## Out of Scope
 
 - Mac / Linux support
@@ -219,9 +235,9 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Tray tooltip | High | Low | **Done** | Shows "G Equalizer [ON] — FPS · Boost +7dB" on hover; updates on toggle/preset/boost change |
 | Calibration reference level warning | High | Low | **Done** | Step 0 in CalibrationWizard: fixed 1kHz reference tone, ask user to set system volume before starting |
 | Preset share codes (base64 export/import) | High | Medium | **Done** | `PresetShareCode.cs` — Encode/Decode. Copy/Paste buttons in Settings → PRESETS section |
-| AutoEQ headphone correction import | Medium | Medium | — | Parse parametric `.txt`, blend into EQ output |
-| Calibration re-test individual bands | Medium | Medium | — | Results screen gets per-band Re-test buttons |
+| AutoEQ headphone correction import | Medium | Medium | **Done** | `AutoEQImporter.cs`. "⬇ Import AutoEQ (.txt)" in Settings → PRESETS |
+| Calibration re-test individual bands | Medium | Medium | **Done** | Results screen grid with ↻ L / ↻ R per frequency |
+| Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | — | **Off by default.** User opts in via Settings toggle. Polls foreground process, maps exe → preset. |
-| Visualizer color mode toggle | Low | Low | — | Solid color or peak-glow alternative to gradient |
 
-**Where to start next session:** AutoEQ import or calibration re-test — next highest-value items.
+**Where to start next session:** Implement auto-preset switching (the only remaining v3 item). Settings toggle to opt in, `DispatcherTimer` polls `GetForegroundWindow` → `GetWindowThreadProcessId` → process name, maps exe → preset name from a config table (editable in Settings).

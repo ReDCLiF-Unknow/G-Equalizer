@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings"
-        Width="400" Height="480"
+        Width="400" Height="720"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BackgroundBrush}"
@@ -20,7 +20,12 @@
                    Foreground="{StaticResource AccentBrush}"
                    Margin="0,0,0,20"/>
 
-        <StackPanel Grid.Row="1" VerticalAlignment="Top">
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="0,0,0,12"
+                      Padding="0,0,10,0">
+        <StackPanel>
 
             <!-- Launch with Windows -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
@@ -97,7 +102,7 @@
                         HorizontalAlignment="Left"
                         Click="ImportPreset_Click"/>
             </StackPanel>
-            <StackPanel Orientation="Horizontal">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <Button Content="⧉ Copy Share Code"
                         HorizontalAlignment="Left"
                         Margin="0,0,8,0"
@@ -107,7 +112,105 @@
                         Click="PasteShareCode_Click"/>
             </StackPanel>
 
+            <!-- AutoEQ import -->
+            <TextBlock Text="HEADPHONE CORRECTION"
+                       FontSize="10" FontWeight="Bold"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       Margin="0,12,0,10"/>
+            <Button Content="⬇ Import AutoEQ (.txt)"
+                    HorizontalAlignment="Left"
+                    Click="ImportAutoEQ_Click"/>
+
+            <!-- Auto-preset switching -->
+            <TextBlock Text="AUTO-PRESET SWITCHING"
+                       FontSize="10" FontWeight="Bold"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       Margin="0,20,0,10"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <CheckBox x:Name="AutoPresetCheck"
+                          VerticalAlignment="Center"
+                          Foreground="{StaticResource TextBrush}"
+                          Checked="AutoPreset_Changed"
+                          Unchecked="AutoPreset_Changed"/>
+                <TextBlock Text="Switch preset when foreground app changes"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0"
+                           Foreground="{StaticResource TextBrush}"/>
+            </StackPanel>
+
+            <!-- Mapping list -->
+            <Border BorderBrush="{StaticResource SectionBorderBrush}"
+                    BorderThickness="1" CornerRadius="4"
+                    Padding="8" Margin="0,0,0,8">
+                <StackPanel>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="28"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Process (.exe)" Grid.Column="0"
+                                   FontSize="10" Foreground="{StaticResource MutedTextBrush}"/>
+                        <TextBlock Text="Preset" Grid.Column="1"
+                                   FontSize="10" Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="8,0,0,0"/>
+                    </Grid>
+                    <ItemsControl x:Name="MappingList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="28"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Exe}" Grid.Column="0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontSize="11"/>
+                                    <TextBlock Text="{Binding Preset}" Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource AccentTextBrush}"
+                                               FontSize="11" Margin="8,0,0,0"/>
+                                    <Button Content="✕" Grid.Column="2"
+                                            Width="22" Height="22"
+                                            FontSize="11"
+                                            Style="{StaticResource IconButtonStyle}"
+                                            Tag="{Binding Exe}"
+                                            Click="RemoveMapping_Click"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Add mapping row -->
+            <Grid Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="70"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="NewExeBox"
+                         Grid.Column="0"
+                         Margin="0,0,6,0"
+                         ToolTip="e.g. cs2.exe"
+                         Text="process.exe"
+                         Foreground="{StaticResource TextDimBrush}"
+                         GotFocus="NewExeBox_GotFocus"
+                         LostFocus="NewExeBox_LostFocus"/>
+                <ComboBox x:Name="NewPresetCombo"
+                          Grid.Column="1"
+                          Margin="0,0,6,0"/>
+                <Button Content="＋ Add"
+                        Grid.Column="2"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Click="AddMapping_Click"/>
+            </Grid>
+
         </StackPanel>
+        </ScrollViewer>
 
         <!-- Close button -->
         <Button Grid.Row="2"

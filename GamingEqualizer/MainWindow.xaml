@@ -121,12 +121,19 @@
                                    FontSize="10" FontWeight="Bold"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    VerticalAlignment="Center"/>
-                        <Button x:Name="LiveModeButton"
-                                Content="○ LIVE"
-                                FontSize="10" Padding="7,2"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center"
-                                Click="LiveModeButton_Click"/>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <Button x:Name="VizColorModeButton"
+                                    Content="◈ GRADIENT"
+                                    FontSize="10" Padding="7,2"
+                                    Margin="0,0,6,0"
+                                    Click="VizColorModeButton_Click"/>
+                            <Button x:Name="LiveModeButton"
+                                    Content="○ LIVE"
+                                    FontSize="10" Padding="7,2"
+                                    Click="LiveModeButton_Click"/>
+                        </StackPanel>
                     </Grid>
                     <Canvas x:Name="VisualizerCanvas" Grid.Row="1"
                             SizeChanged="VisualizerCanvas_SizeChanged"/>

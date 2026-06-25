@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -61,12 +63,13 @@ public partial class MainWindow : Window
 
     // ── Visualizer ──────────────────────────────────────────────────────────
     private const int VizBars = 80;
-    private readonly WpfRect[] _vizBars    = new WpfRect[VizBars];
-    private readonly double[]  _vizCurrent = new double[VizBars];
-    private readonly double[]  _vizTarget  = new double[VizBars];
-    private WpfRect?           _vizCenter;
-    private double             _ripplePhase;
-    private DispatcherTimer?   _vizTimer;
+    private readonly WpfRect[]          _vizBars    = new WpfRect[VizBars];
+    private readonly SolidColorBrush[]  _vizBrushes = new SolidColorBrush[VizBars];
+    private readonly double[]           _vizCurrent = new double[VizBars];
+    private readonly double[]           _vizTarget  = new double[VizBars];
+    private WpfRect?                    _vizCenter;
+    private double                      _ripplePhase;
+    private DispatcherTimer?            _vizTimer;
 
     // Live audio
     private bool                   _liveMode;
@@ -79,6 +82,12 @@ public partial class MainWindow : Window
     // Preset transition animation
     private readonly float[] _transitionTarget  = new float[10];
     private DispatcherTimer?  _transitionTimer;
+
+    // Auto-preset switching
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    private DispatcherTimer? _autoPresetTimer;
+    private string?          _lastAutoExe;
 
     public MainWindow()
     {
@@ -97,6 +106,7 @@ public partial class MainWindow : Window
         RestoreState();
         BuildVisualizer();
         StartPulse();
+        RefreshAutoPresetTimer();
 
         if (!EQConfigWriter.IsEqualizerApoInstalled())
             ShowEqApoMissingBanner();
@@ -110,6 +120,72 @@ public partial class MainWindow : Window
         byte g = (byte)(58  + (114 - 58)  * t);
         byte b = (byte)(237 + (182 - 237) * t);
         return WpfColor.FromRgb(r, g, b);
+    }
+
+    private WpfColor VizBarColor(int barIndex, double intensity, double t)
+    {
+        return _settings.VizColorMode switch
+        {
+            1 => WpfColor.FromRgb(0x7c, 0x3a, 0xed),  // Solid accent
+            2 => PeakGlowColor(intensity, t),           // Peak Glow
+            _ => BandColor(t)                           // Gradient (default)
+        };
+    }
+
+    private static WpfColor PeakGlowColor(double intensity, double t)
+    {
+        intensity = Math.Clamp(intensity, 0, 1);
+        var mid   = BandColor(t);
+
+        if (intensity < 0.5)
+        {
+            // Dim background → gradient color
+            double a = intensity * 2;
+            byte r = (byte)(0x16 + (mid.R - 0x16) * a);
+            byte g = (byte)(0x05 + (mid.G - 0x05) * a);
+            byte bv = (byte)(0x2e + (mid.B - 0x2e) * a);
+            return WpfColor.FromRgb(r, g, bv);
+        }
+        else
+        {
+            // Gradient color → white
+            double a = (intensity - 0.5) * 2;
+            byte r = (byte)(mid.R + (255 - mid.R) * a);
+            byte g = (byte)(mid.G + (255 - mid.G) * a);
+            byte bv = (byte)(mid.B + (255 - mid.B) * a);
+            return WpfColor.FromRgb(r, g, bv);
+        }
+    }
+
+    private static readonly string[] VizColorModeLabels = { "◈ GRADIENT", "◈ SOLID", "◈ PEAK GLOW" };
+
+    private void ApplyVizColorMode()
+    {
+        if (VizColorModeButton != null)
+        {
+            VizColorModeButton.Content    = VizColorModeLabels[_settings.VizColorMode];
+            VizColorModeButton.Foreground = _settings.VizColorMode == 0
+                ? (System.Windows.Media.Brush)FindResource("TextDimBrush")
+                : (System.Windows.Media.Brush)FindResource("AccentBrush");
+        }
+
+        if (_vizBrushes[0] == null) return; // not yet built
+
+        if (_settings.VizColorMode != 2) // gradient and solid are static — set once
+        {
+            for (int j = 0; j < VizBars; j++)
+            {
+                double t = j / (double)(VizBars - 1);
+                _vizBrushes[j].Color = VizBarColor(j, 0.5, t);
+            }
+        }
+    }
+
+    private void VizColorModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.VizColorMode = (_settings.VizColorMode + 1) % 3;
+        _settings.Save();
+        ApplyVizColorMode();
     }
 
     // ── Sliders ─────────────────────────────────────────────────────────────
@@ -483,6 +559,7 @@ public partial class MainWindow : Window
         if (win.NewCalibrationGains != null) ApplyCalibrationGains(win.NewCalibrationGains);
         if (win.ImportedPreset != null)      HandleImportedPreset(win.ImportedPreset);
         RefreshBoostButton();
+        RefreshAutoPresetTimer();
         if (_settings.EqEnabled) ApplyCurrentGains();
     }
 
@@ -615,18 +692,17 @@ public partial class MainWindow : Window
         };
         VisualizerCanvas.Children.Add(_vizCenter);
 
-        // 80 gradient bars
+        // 80 bars — store brush refs so color mode can update them per-frame
         for (int j = 0; j < VizBars; j++)
         {
-            double t    = j / (double)(VizBars - 1);
-            var    bar  = new WpfRect
-            {
-                Fill    = new SolidColorBrush(BandColor(t)),
-                RadiusX = 1, RadiusY = 1
-            };
+            double t      = j / (double)(VizBars - 1);
+            var    brush  = new SolidColorBrush(VizBarColor(j, 0.5, t));
+            var    bar    = new WpfRect { Fill = brush, RadiusX = 1, RadiusY = 1 };
+            _vizBrushes[j] = brush;
             VisualizerCanvas.Children.Add(bar);
             _vizBars[j] = bar;
         }
+        ApplyVizColorMode();
 
         _vizTimer          = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _vizTimer.Tick    += VizTick;
@@ -686,6 +762,13 @@ public partial class MainWindow : Window
             _vizBars[j].Opacity = gain >= 0 ? 1.0 : 0.4;
             Canvas.SetLeft(_vizBars[j], x);
             Canvas.SetTop(_vizBars[j], y);
+
+            if (_settings.VizColorMode == 2) // Peak Glow — update color per-frame
+            {
+                double t = j / (double)(VizBars - 1);
+                double intensity = Math.Abs(_vizCurrent[j]) / 12.0;
+                _vizBrushes[j].Color = VizBarColor(j, intensity, t);
+            }
         }
 
         if (_vizCenter != null)
@@ -813,6 +896,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         if (_hwndSource != null) HotkeyManager.Unregister(_hwndSource);
+        _autoPresetTimer?.Stop();
         _spectrum?.Dispose();
         base.OnClosed(e);
     }
@@ -882,5 +966,53 @@ public partial class MainWindow : Window
         int current = presetChips.FindIndex(c => c.Name == _settings.ActivePreset);
         int next    = (current + 1) % presetChips.Count;
         OnChipClick(presetChips[next].Name);
+    }
+
+    // ── Auto-preset switching ────────────────────────────────────────────────
+
+    internal void RefreshAutoPresetTimer()
+    {
+        if (_settings.AutoPresetEnabled)
+        {
+            if (_autoPresetTimer == null)
+            {
+                _autoPresetTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                _autoPresetTimer.Tick += AutoPresetTick;
+            }
+            _autoPresetTimer.Start();
+        }
+        else
+        {
+            _autoPresetTimer?.Stop();
+            _lastAutoExe = null;
+        }
+    }
+
+    private void AutoPresetTick(object? sender, EventArgs e)
+    {
+        try
+        {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return;
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            if (pid == 0) return;
+
+            string exe;
+            try { exe = Process.GetProcessById((int)pid).ProcessName + ".exe"; }
+            catch { return; }
+
+            if (exe.Equals(_lastAutoExe, StringComparison.OrdinalIgnoreCase)) return;
+            _lastAutoExe = exe;
+
+            if (_settings.ProcessPresetMap.TryGetValue(exe, out string? presetName) &&
+                presetName != _settings.ActivePreset &&
+                _presetManager.Get(presetName) != null)
+            {
+                OnChipClick(presetName);
+                RefreshTrayTooltip();
+            }
+        }
+        catch { }
     }
 }
