@@ -150,10 +150,17 @@
                         <RowDefinition Height="18"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="EQUALIZER"
-                               FontSize="10" FontWeight="Bold"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               VerticalAlignment="Center"/>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="EQUALIZER"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="Reset all"
+                                FontSize="10" Padding="7,2"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Click="ResetAllBands_Click"/>
+                    </Grid>
                     <UniformGrid x:Name="SliderGrid"
                                  Grid.Row="1"
                                  Rows="1" Columns="10"

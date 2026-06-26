@@ -18,7 +18,7 @@ public partial class App : System.Windows.Application
         if (!startMinimized)
             mainWindow.Show();
 
-        var settings = AppSettings.Load();
+        var settings = mainWindow.Settings;
         if (!settings.HasCompletedOnboarding)
         {
             var wizard = new OnboardingWizard { Owner = mainWindow };

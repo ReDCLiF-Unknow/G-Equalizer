@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     private TrayController? _tray;
 
     public void SetTray(TrayController tray) => _tray = tray;
+    public AppSettings Settings => _settings;
 
     private bool _suppressPresetChange = false;
     private bool _suppressSliderChange = false;
@@ -444,6 +445,17 @@ public partial class MainWindow : Window
 
     private void RestoreState()
     {
+        // On first launch (no saved bands), load the default preset
+        if (_settings.BandGains.All(g => g == 0f) && !string.IsNullOrEmpty(_settings.DefaultPreset))
+        {
+            var defaultPreset = _presetManager.Get(_settings.DefaultPreset);
+            if (defaultPreset != null)
+            {
+                Array.Copy(defaultPreset.Bands, _settings.BandGains, 10);
+                _settings.ActivePreset = _settings.DefaultPreset;
+            }
+        }
+
         _suppressSliderChange = true;
         for (int i = 0; i < 10; i++)
         {
@@ -488,6 +500,16 @@ public partial class MainWindow : Window
 
         if (_settings.EqEnabled)
             ApplyCurrentGains();
+    }
+
+    private void ResetAllBands_Click(object sender, RoutedEventArgs e)
+    {
+        for (int i = 0; i < 10; i++)
+            _transitionTarget[i] = 0f;
+        _settings.ActivePreset = "";
+        SetActiveChip("Custom");
+        _settings.Save();
+        StartPresetTransition();
     }
 
     private void ToggleButton_Click(object sender, RoutedEventArgs e)
@@ -967,6 +989,12 @@ public partial class MainWindow : Window
         catch (Exception ex) { ShowErrorBanner($"Failed to bypass EQ: {ex.Message}"); }
     }
 
+    public void BypassAndQuit()
+    {
+        try { _eqWriter.Bypass(); } catch { }
+        System.Windows.Application.Current.Shutdown();
+    }
+
     private void ShowErrorBanner(string message)
     {
         ErrorText.Text          = message;
@@ -1194,10 +1222,38 @@ public partial class MainWindow : Window
             OnChipClick(name);
         };
 
+        // Wrap chip + delete button in a panel for custom presets
+        System.Windows.UIElement chipElement;
+        if (!BuiltInPresets.Contains(name))
+        {
+            var deleteBtn = new WpfButton
+            {
+                Content         = "✕",
+                FontSize        = 9,
+                Width           = 16,
+                Height          = 16,
+                Padding         = new Thickness(0),
+                Margin          = new Thickness(-6, 0, 4, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Style           = (Style)Application.Current.Resources["IconButtonStyle"],
+                ToolTip         = $"Delete preset '{name}'"
+            };
+            deleteBtn.Click += (_, _) => DeletePresetChip(name);
+
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Children.Add(chip);
+            panel.Children.Add(deleteBtn);
+            chipElement = panel;
+        }
+        else
+        {
+            chipElement = chip;
+        }
+
         // Insert before the Custom chip (always last)
         int idx = _chips.Count - 1;
         _chips.Insert(idx, (name, chip));
-        ChipPanel.Children.Insert(idx, chip);
+        ChipPanel.Children.Insert(idx, chipElement);
 
         _miniWindow?.AddChip(name);
     }
@@ -1207,6 +1263,29 @@ public partial class MainWindow : Window
         _presetManager.Reload();
         if (_chips.Any(c => c.Name == preset.Name)) return;
         InsertPresetChip(preset.Name);
+    }
+
+    private static readonly HashSet<string> BuiltInPresets =
+        new(StringComparer.OrdinalIgnoreCase) { "Flat", "FPS", "RPG", "Cinematic", "Music" };
+
+    private void DeletePresetChip(string name)
+    {
+        var destPath = Path.Combine(PresetsDir, $"{name}.json");
+        try { File.Delete(destPath); } catch { }
+
+        _presetManager.Reload();
+        var entry = _chips.FirstOrDefault(c => c.Name == name);
+        if (entry != default)
+        {
+            _chips.Remove(entry);
+            ChipPanel.Children.Remove(entry.Chip);
+        }
+
+        if (_settings.ActivePreset == name)
+        {
+            _settings.ActivePreset = "Flat";
+            OnChipClick("Flat");
+        }
     }
 
     // ── Global hotkeys ───────────────────────────────────────────────────────

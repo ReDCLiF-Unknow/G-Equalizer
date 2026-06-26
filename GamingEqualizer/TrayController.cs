@@ -27,13 +27,20 @@ public class TrayController : IDisposable
 
     private void LoadIcon(bool eqOn)
     {
-        var iconName = eqOn ? "tray-icon-on.ico" : "tray-icon-off.ico";
-        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", iconName);
-
-        if (File.Exists(iconPath))
-            _notifyIcon.Icon = new System.Drawing.Icon(iconPath);
-        else
+        var resourceName = eqOn ? "tray-icon-on.ico" : "tray-icon-off.ico";
+        var uri = new Uri($"pack://application:,,,/Assets/{resourceName}", UriKind.Absolute);
+        try
+        {
+            var stream = System.Windows.Application.GetResourceStream(uri)?.Stream;
+            if (stream != null)
+                _notifyIcon.Icon = new System.Drawing.Icon(stream);
+            else
+                _notifyIcon.Icon = SystemIcons.Application;
+        }
+        catch
+        {
             _notifyIcon.Icon = SystemIcons.Application;
+        }
     }
 
     private void BuildContextMenu()
@@ -55,7 +62,10 @@ public class TrayController : IDisposable
         openItem.Click += (_, _) => Application.Current.Dispatcher.Invoke(ShowWindow);
 
         var quitItem = new ToolStripMenuItem("Quit");
-        quitItem.Click += (_, _) => Application.Current.Dispatcher.Invoke(() => Application.Current.Shutdown());
+        quitItem.Click += (_, _) => Application.Current.Dispatcher.Invoke(() =>
+        {
+            _mainWindow.BypassAndQuit();
+        });
 
         menu.Items.Add(openItem);
         menu.Items.Add(toggleItem);

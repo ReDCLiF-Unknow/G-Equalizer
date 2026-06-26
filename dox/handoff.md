@@ -27,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v2.4.0 released.** Installer and portable ZIP in `dist/`.
+**v2.5.0 released.** Installer and EXE in `dist/`.
 
 | Phase | Status |
 |---|---|
@@ -45,6 +45,7 @@ Key features:
 | v2.2: Button color fix (deep violet), release build | **Done** |
 | v2.3: Auto-preset switching, scrollbar theme, Settings polish | **Done** |
 | v2.4: Settings inline page, chip color fix, button sizing | **Done** |
+| v2.5: Polish pass — tray icon fix, preset delete, reset all bands, DefaultPreset bug, tray quit bypass | **Done** |
 
 ---
 
@@ -97,7 +98,7 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.4.0.exe` | 49 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `GEqualizer-Setup-2.5.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
 | `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
 | `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
@@ -124,8 +125,11 @@ None. All previously known issues are resolved.
 | Tray icons were placeholders | Replaced with custom shield design matching app palette |
 | `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Set programmatically via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
 | White Windows titlebar on all windows | Fixed via `DwmSetWindowAttribute(DWMWA_CAPTION_COLOR)` in `DwmHelper.ApplyDarkTitlebar()` — applied to all windows |
-| Tray icons not appearing (showing generic icon) | Changed from `<Resource>` to `<Content CopyToOutputDirectory>` in .csproj so they're on disk at runtime |
+| Tray icons not appearing in single-file publish | Changed tray icons from `<Content CopyToOutputDirectory>` to `<Resource>` — now embedded in EXE, loaded via `Application.GetResourceStream(pack://...)` |
 | `dotnet publish` corrupts `dist/app/app-icon.ico` | Manually copy `Assets/app-icon.ico` → `dist/app/` after every publish, before rebuilding the NSIS installer |
+| `DefaultPreset` setting saved but never applied | `RestoreState()` now loads the default preset on first launch (when all bands are 0) |
+| Tray → Quit left EQ active in EqualizerAPO | Quit now calls `BypassAndQuit()` — writes bypass config before shutdown |
+| `AppSettings.Load()` called twice on startup | `App.xaml.cs` now reads `mainWindow.Settings` instead of loading a second instance |
 
 ---
 
@@ -240,6 +244,19 @@ None. All previously known issues are resolved.
 
 ---
 
+## v2.5 Polish (this session)
+
+| Fix | Notes |
+|---|---|
+| Tray icon fix (single-file publish) | Tray icons changed from `<Content>` to `<Resource>` in .csproj. `TrayController.LoadIcon()` now uses `Application.GetResourceStream(pack://...)` instead of file path — works correctly in single-file published EXE |
+| Reset all bands button | "Reset all" button in the EQUALIZER section header — zeroes all 10 sliders with the same smooth animated transition as a preset switch. Switches active chip to Custom |
+| Preset deletion | Custom presets now show a ✕ button next to their chip. Built-in presets (Flat, FPS, RPG, Cinematic, Music) are protected. Deleting removes the JSON file, the chip, and falls back to Flat if it was active |
+| DefaultPreset bug fix | `RestoreState()` now applies `DefaultPreset` on first launch (when all bands are 0). Previously the setting was saved but never read |
+| Tray quit bypasses EQ | Quit from tray context menu now calls `BypassAndQuit()` — writes EqualizerAPO bypass config before shutting down so EQ doesn't stay active after exit |
+| Double AppSettings.Load() fix | `App.xaml.cs` now uses `mainWindow.Settings` (new public property) instead of calling `AppSettings.Load()` a second time on startup |
+
+---
+
 ## Out of Scope
 
 - Mac / Linux support
@@ -263,4 +280,4 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
 
-**Where to start next session:** All v3 features are complete and v2.4.0 is shipped. Options: plan v4, or continue UX polish. No known bugs or outstanding work.
+**Where to start next session:** v2.5.0 is fully shipped — installer and EXE both in `dist/`. No known bugs or outstanding work. Options: plan v4 or continue UX polish.
