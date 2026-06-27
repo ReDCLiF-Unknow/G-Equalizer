@@ -568,6 +568,7 @@ public partial class MainWindow : Window
             if (writeConfig) SafeBypass();
         }
 
+        _tray?.SetEqState(enabled);
         RefreshTrayTooltip();
     }
 
