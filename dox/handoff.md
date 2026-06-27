@@ -46,6 +46,7 @@ Key features:
 | v2.3: Auto-preset switching, scrollbar theme, Settings polish | **Done** |
 | v2.4: Settings inline page, chip color fix, button sizing | **Done** |
 | v2.5: Polish pass — tray icon fix, preset delete, reset all bands, DefaultPreset bug, tray quit bypass | **Done** |
+| v2.5.1: Tray icon state sync on EQ toggle | **Done** |
 
 ---
 
@@ -126,6 +127,7 @@ None. All previously known issues are resolved.
 | `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Set programmatically via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
 | White Windows titlebar on all windows | Fixed via `DwmSetWindowAttribute(DWMWA_CAPTION_COLOR)` in `DwmHelper.ApplyDarkTitlebar()` — applied to all windows |
 | Tray icons not appearing in single-file publish | Changed tray icons from `<Content CopyToOutputDirectory>` to `<Resource>` — now embedded in EXE, loaded via `Application.GetResourceStream(pack://...)` |
+| Tray icon not switching on EQ toggle | `_tray?.SetEqState(enabled)` added to `MainWindow.SetEqState()` — icon now switches between colored and gray on every toggle |
 | `dotnet publish` corrupts `dist/app/app-icon.ico` | Manually copy `Assets/app-icon.ico` → `dist/app/` after every publish, before rebuilding the NSIS installer |
 | `DefaultPreset` setting saved but never applied | `RestoreState()` now loads the default preset on first launch (when all bands are 0) |
 | Tray → Quit left EQ active in EqualizerAPO | Quit now calls `BypassAndQuit()` — writes bypass config before shutdown |
@@ -153,7 +155,7 @@ None. All previously known issues are resolved.
 - **State storage:** `%AppData%\GamingEqualizer\AppSettings.json` — active preset, on/off state, band gains, launch-with-Windows flag, per-ear calibration, onboarding flag, `BoostDb`, `BoostEnabled`.
 - **Sound Boost:** `BoostDb` (0–20 dB, default 0) folds into the EqualizerAPO `Preamp:` line as `Preamp: (-6 + boostDb) dB`. The `-6 dB` base headroom is always present to prevent clipping. `EQConfigWriter.Apply` and `ApplyPerEar` both accept `boostDb = 0f` as a default. `BoostEnabled` gates whether boost is applied — toggle button in titlebar, checkbox + slider in the inline Settings panel. Since Settings is now inline in MainWindow, boost changes call `RefreshBoostButton()` and `ApplyCurrentGains()` directly (no callback needed).
 - **Titlebar color:** All windows call `DwmHelper.ApplyDarkTitlebar(this)` in `OnSourceInitialized`. The color `#1a0533` is stored as COLORREF `0x00330519` in `DwmHelper.cs`. Windows 11 only — on older Windows it silently no-ops.
-- **App icon:** Set programmatically in `MainWindow` constructor via `BitmapFrame.Create("pack://application:,,,/Assets/app-icon.ico")` — avoids the .NET 10 XAML crash. `<ApplicationIcon>` in .csproj handles the exe/taskbar icon. Tray icons loaded from file path (must be `<Content>` not `<Resource>` in .csproj).
+- **App icon:** Set programmatically in `MainWindow` constructor via `BitmapFrame.Create("pack://application:,,,/Assets/app-icon.ico")` — avoids the .NET 10 XAML crash. `<ApplicationIcon>` in .csproj handles the exe/taskbar icon. Tray icons are `<Resource>` (embedded) and loaded via `Application.GetResourceStream(pack://...)` in `TrayController` — required for single-file publish.
 - **Custom icon design:** Shield shape with 7 EQ bars, purple→pink gradient (`#7c3aed → #f472b6`), dark background `#16052E`. Generated with PowerShell + `System.Drawing` — see the generation script in the session history if you need to regenerate. `app-icon-backup.ico` is the original.
 - **Slider double-click reset:** `slider.MouseDoubleClick += (_, _) => { slider.Value = 0; }` wired in `BuildSliders()` for each of the 10 sliders.
 - **Error policy:** Config write failures show an error banner and revert; corrupted JSON files are skipped and logged to `error.log`; NAudio device failure cancels the calibration wizard with a clear message.
