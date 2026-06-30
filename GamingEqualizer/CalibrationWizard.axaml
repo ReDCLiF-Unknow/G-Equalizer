@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GamingEqualizer.CalibrationWizard"
+        Title="Hearing Calibration"
+        Width="520" Height="440"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Step header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock x:Name="StepTitle"
+                       Text="Calibration Wizard"
+                       FontSize="18" FontWeight="Bold"
+                       Foreground="{DynamicResource AccentBrush}"/>
+            <TextBlock x:Name="StepSubtitle"
+                       Text="Left ear — Step 1 of 7"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextDimBrush}"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Ear indicator -->
+        <Border Grid.Row="1" Margin="0,0,0,14" HorizontalAlignment="Left">
+            <StackPanel Orientation="Horizontal">
+                <Border x:Name="LeftEarPill"
+                        CornerRadius="12" Padding="14,5" Margin="0,0,6,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+                            <GradientStop Color="#7c3aed" Offset="0"/>
+                            <GradientStop Color="#a855f7" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock x:Name="LeftEarLabel" Text="◀ LEFT EAR"
+                               Foreground="White" FontSize="11" FontWeight="Bold"/>
+                </Border>
+                <Border x:Name="RightEarPill"
+                        Background="#1a1a2e" BorderBrush="#252538" BorderThickness="1"
+                        CornerRadius="12" Padding="14,5">
+                    <TextBlock x:Name="RightEarLabel" Text="RIGHT EAR ▶"
+                               Foreground="{DynamicResource TextDimBrush}" FontSize="11" FontWeight="Bold"/>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Wizard panel -->
+        <StackPanel x:Name="WizardPanel" Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock x:Name="InstructionText"
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Foreground="{DynamicResource TextBrush}"
+                       FontSize="14"
+                       Margin="0,0,0,24"/>
+
+            <TextBlock x:Name="FrequencyLabel"
+                       Text="125 Hz"
+                       FontSize="28" FontWeight="Bold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,24"/>
+
+            <Slider x:Name="ThresholdSlider"
+                    Orientation="Horizontal"
+                    Minimum="-60" Maximum="0"
+                    Value="-30"
+                    Width="300"
+                    HorizontalAlignment="Center"/>
+
+            <TextBlock x:Name="ThresholdValueLabel"
+                       Text="-30 dB"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextDimBrush}"
+                       FontSize="13"
+                       Margin="0,8,0,0"/>
+        </StackPanel>
+
+        <!-- Results panel -->
+        <ScrollViewer x:Name="ResultsPanel"
+                      Grid.Row="2"
+                      IsVisible="False"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="ResultsStack" Margin="0,4,0,0"/>
+        </ScrollViewer>
+
+        <!-- Error banner -->
+        <Border x:Name="ErrorBanner"
+                Grid.Row="3"
+                Background="{DynamicResource ErrorBrush}"
+                CornerRadius="4"
+                Padding="10,6"
+                Margin="0,0,0,12"
+                IsVisible="False">
+            <TextBlock x:Name="ErrorText" Foreground="White" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- Navigation -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Content="Cancel" Margin="0,0,8,0" Click="CancelButton_Click"/>
+            <Button x:Name="NextButton"   Content="Next →"
+                    Theme="{StaticResource PrimaryButtonTheme}"
+                    Click="NextButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

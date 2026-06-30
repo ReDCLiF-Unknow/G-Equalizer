@@ -1,19 +1,24 @@
 global using System;
 global using System.Collections.Generic;
+global using System.Collections.ObjectModel;
+global using System.Diagnostics;
 global using System.IO;
 global using System.Linq;
+global using System.Runtime.InteropServices;
 global using System.Threading;
-
-// Resolve WPF vs WinForms ambiguities caused by UseWindowsForms=true
-global using Application = System.Windows.Application;
-global using Orientation = System.Windows.Controls.Orientation;
-global using HorizontalAlignment = System.Windows.HorizontalAlignment;
-global using VerticalAlignment = System.Windows.VerticalAlignment;
-global using Visibility = System.Windows.Visibility;
-global using Window = System.Windows.Window;
-global using WindowState = System.Windows.WindowState;
-global using MessageBox = System.Windows.MessageBox;
-global using SystemIcons  = System.Drawing.SystemIcons;
-global using WpfButton    = System.Windows.Controls.Button;
-global using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
-global using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+global using Avalonia;
+global using Avalonia.Controls;
+global using Avalonia.Controls.Primitives;
+// Import only the shape types we use so System.IO.Path stays unambiguous
+global using Ellipse   = Avalonia.Controls.Shapes.Ellipse;
+global using Rectangle = Avalonia.Controls.Shapes.Rectangle;
+global using Avalonia.Input;
+global using Avalonia.Interactivity;
+global using Avalonia.Layout;
+global using Avalonia.Media;
+global using Avalonia.Platform;
+global using Avalonia.Threading;
+global using Avalonia.Styling;
+global using Newtonsoft.Json;
+global using GamingEqualizer.Models;
+global using GamingEqualizer.Platform;

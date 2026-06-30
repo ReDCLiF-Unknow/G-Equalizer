@@ -12,7 +12,7 @@ Unicode True
 
 !define APP_NAME       "G Equalizer"
 !define APP_EXE        "GamingEqualizer.exe"
-!define APP_VERSION    "2.5.0"
+!define APP_VERSION    "3.0.0"
 !define PUBLISHER      "ReDCLiF"
 !define INSTALL_DIR    "$PROGRAMFILES64\GEqualizer"
 !define REG_UNINSTALL  "Software\Microsoft\Windows\CurrentVersion\Uninstall\GEqualizer"
@@ -120,8 +120,7 @@ SectionEnd
 Section "G Equalizer" SEC_APP
 
     SetOutPath "$INSTDIR"
-    File "app\${APP_EXE}"
-    File /r "app\Presets"
+    File /r /x "*.pdb" "app\"
 
     ; Desktop shortcut
     CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0
@@ -140,7 +139,7 @@ Section "G Equalizer" SEC_APP
     WriteRegStr   HKLM "${REG_UNINSTALL}" "DisplayIcon"      "$INSTDIR\${APP_EXE}"
     WriteRegDWORD HKLM "${REG_UNINSTALL}" "NoModify"         1
     WriteRegDWORD HKLM "${REG_UNINSTALL}" "NoRepair"         1
-    WriteRegDWORD HKLM "${REG_UNINSTALL}" "EstimatedSize"    170000
+    WriteRegDWORD HKLM "${REG_UNINSTALL}" "EstimatedSize"    105000
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -158,10 +157,7 @@ Section "Uninstall"
 
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "GamingEqualizer"
 
-    Delete "$INSTDIR\${APP_EXE}"
-    Delete "$INSTDIR\Uninstall.exe"
-    RMDir /r "$INSTDIR\Presets"
-    RMDir "$INSTDIR"
+    RMDir /r "$INSTDIR"
 
     Delete "$DESKTOP\${APP_NAME}.lnk"
     RMDir /r "$SMPROGRAMS\${APP_NAME}"

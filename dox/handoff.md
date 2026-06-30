@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-06-25 (v2.4.0)
+**Date:** 2026-06-30 (v3.0.0 — Avalonia migration complete)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -27,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v2.5.0 released.** Installer and EXE in `dist/`.
+**v3.0.0 released.** Avalonia cross-platform build. Installer and EXE in `dist/`.
 
 | Phase | Status |
 |---|---|
@@ -47,14 +47,15 @@ Key features:
 | v2.4: Settings inline page, chip color fix, button sizing | **Done** |
 | v2.5: Polish pass — tray icon fix, preset delete, reset all bands, DefaultPreset bug, tray quit bypass | **Done** |
 | v2.5.1: Tray icon state sync on EQ toggle | **Done** |
+| Avalonia migration (cross-platform: Win/Mac/Linux) | **Done** — stack overflow fixed, WPF project removed, v3.0.0 installer shipped |
 
 ---
 
 ## File Structure (as built)
 
 ```
-GamingEqualizer/
-  GamingEqualizer.csproj        .NET 10, NAudio + Newtonsoft.Json
+GamingEqualizer/                (Avalonia — cross-platform)
+  GamingEqualizer.csproj        .NET 10, NAudio + Newtonsoft.Json + Avalonia 12
   app.manifest                  requireAdministrator (release); switch to asInvoker for dev
   GlobalUsings.cs               Resolves WPF vs WinForms namespace conflicts
   DwmHelper.cs                  Static helper — ApplyDarkTitlebar(window) via DwmSetWindowAttribute
@@ -99,20 +100,23 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-2.5.0.exe` | 48 MB | All-in-one NSIS installer — downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
-| `GEqualizer-portable.zip` | 68 MB | Portable ZIP — extract and run, no installer needed |
-| `app/GamingEqualizer.exe` | 166 MB | Raw self-contained EXE (uncompressed) |
+| `GEqualizer-Setup-3.0.0.exe` | ~31 MB | Windows — all-in-one NSIS installer, downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
+| `app/GamingEqualizer.exe` | ~100 MB | Windows — raw self-contained EXE (uncompressed, Avalonia) |
+| `GEqualizer-macOS-arm64-3.0.0.zip` | ~41 MB | macOS Apple Silicon — `.app` bundle (zip). Unzip, right-click → Open to bypass Gatekeeper. `.icns` icon and `.dmg` need to be generated on macOS. |
+| `GEqualizer-macOS-x64-3.0.0.zip` | ~43 MB | macOS Intel — same as above |
+| `GEqualizer-linux-x64-3.0.0.tar.gz` | ~40 MB | Linux x64 — tar.gz. Extract and run `./GEqualizer-linux/GamingEqualizer`. `.AppImage` packaging needs Linux tools. |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
 
 **Publish command** (run from `GamingEqualizer/`):
 ```
-dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ..\dist\app
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ..\dist\app
+Copy-Item Assets\app-icon.ico ..\dist\app\app-icon.ico -Force
 ```
 
-> **Important:** After `dotnet publish`, copy the valid icon before rebuilding the installer — the publish output corrupts `dist/app/app-icon.ico`:
-> ```
-> Copy-Item GamingEqualizer\Assets\app-icon.ico dist\app\app-icon.ico -Force
-> ```
+Then rebuild installer from `dist/`:
+```
+& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+```
 
 ---
 
@@ -261,7 +265,6 @@ None. All previously known issues are resolved.
 
 ## Out of Scope
 
-- Mac / Linux support
 - Per-app EQ
 - Microphone processing
 - Cloud sync
@@ -282,4 +285,157 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
 
-**Where to start next session:** v2.5.0 is fully shipped — installer and EXE both in `dist/`. No known bugs or outstanding work. Options: plan v4 or continue UX polish.
+**Where to start next session:** v3.0.0 complete. All three platforms built and packaged. Remaining Mac/Linux work: (1) on macOS — run `iconutil` to generate `.icns` and `hdiutil` to produce a `.dmg`; (2) on Linux — use `appimagetool` for `.AppImage`. The EQ backends (`MacEQBackend`, `LinuxEQBackend`) are implemented and need real-device smoke testing.
+
+---
+
+## Avalonia Migration (in progress)
+
+**Goal:** Port the WPF UI to Avalonia 12 so the app runs on Windows, macOS, and Linux. EQ backends: Windows → EqualizerAPO, macOS → eqMac HTTP API, Linux → EasyEffects preset file + CLI.
+
+**Strategy:** New project `GamingEqualizer.Avalonia/` lives alongside the original `GamingEqualizer/` (WPF). WPF project stays intact until Avalonia port is complete and compiling.
+
+### What's done (all files complete)
+
+| File | Status | Notes |
+|---|---|---|
+| `GamingEqualizer.Avalonia.csproj` | ✅ Done | `net10.0` (no -windows), NAudio + Newtonsoft.Json + Avalonia 12.0.5 |
+| `Program.cs` | ✅ Done | `GamingEqualizer` namespace, `UsePlatformDetect()` |
+| `GlobalUsings.cs` | ✅ Done | `Ellipse`/`Rectangle` aliased explicitly (avoids `Path` ambiguity with `System.IO.Path`); `using Avalonia.Styling` for `ControlTheme` |
+| `Platform/IEQBackend.cs` | ✅ Done | Interface: Apply, ApplyPerEar, Bypass, IsAvailable |
+| `Platform/WindowsEQBackend.cs` | ✅ Done | Instance `_writer = new EQConfigWriter()`, `IsAvailable` calls `EQConfigWriter.IsEqualizerApoInstalled()` |
+| `Platform/StubEQBackend.cs` | ✅ Done | No-op, logs message |
+| `Platform/PlatformServices.cs` | ✅ Done | Factory: `IsWindows()` → WindowsEQBackend else Stub |
+| `HotkeyManager.cs` | ✅ Done | Rewritten to take `IntPtr` instead of `HwndSource` |
+| `DwmHelper.cs` | ✅ Done | Rewritten to take `IntPtr`; wrapped in `IsWindows()` guard |
+| `TrayController.cs` | ✅ Done | Uses Avalonia `TrayIcon` + `NativeMenu` instead of WinForms NotifyIcon |
+| `MsgBox.cs` | ✅ Done | Simple async helper dialog (replaces WPF `MessageBox.Show`) |
+| `App.axaml` | ✅ Done | All `ControlTheme` elements in `Application.Resources > ResourceDictionary` (NOT in `Styles`); `Application.Styles` has FluentTheme + style classes |
+| `App.axaml.cs` | ✅ Done | `desktop.Exit` event for tray dispose (no `OnExiting()` override in Avalonia 12) |
+| `MainWindow.axaml` | ✅ Done | Full layout ported; `IsSnapToTicks` removed (doesn't exist in Avalonia 12 Slider) |
+| `MainWindow.axaml.cs` | ✅ Done | Clipboard via `ClipboardExtensions` (`TryGetTextAsync`/`SetTextAsync`); null guard in `PositionVizBars` |
+| `MiniWindow.axaml` | ✅ Done | `WindowDecorations="None"` (not obsolete `SystemDecorations`) |
+| `MiniWindow.axaml.cs` | ✅ Done | Pulse timer animates status dot; `BeginMoveDrag(e)` for drag |
+| `SavePresetDialog.axaml` | ✅ Done | `PlaceholderText` (not obsolete `Watermark`) |
+| `SavePresetDialog.axaml.cs` | ✅ Done | `Close(true/false)` instead of WPF `DialogResult`; `Key.Return` not `Key.Enter` |
+| `OnboardingWizard.axaml` | ✅ Done | `BoxShadow` on logo border; step dots with `IsVisible` toggles |
+| `OnboardingWizard.axaml.cs` | ✅ Done | `Control[]` pages, `Ellipse[]` dots; `ShouldRunCalibration` public property |
+| `CalibrationWizard.axaml` | ✅ Done | `WizardPanel`/`ResultsPanel` toggled by `IsVisible` |
+| `CalibrationWizard.axaml.cs` | ✅ Done | `RangeBaseValueChangedEventArgs`; `LinearGradientBrush` via object initializer + `RelativePoint`; `OnClosed` disposes NAudio |
+| All platform-agnostic logic files | ✅ Done | Copied verbatim: Models, PresetManager, EQConfigWriter, AutoEQImporter, PresetShareCode, Logger, ProcessMappingRow, AudioSpectrumAnalyzer, Presets/*.json, Assets/*.ico |
+
+### Key Avalonia vs WPF API differences (reference)
+
+- `Visibility.Visible/Collapsed` → `IsVisible = true/false` (code), `IsVisible="True/False"` (XAML)
+- `Window.ShowDialog()` → `await window.ShowDialog<bool>(owner)` (returns `bool` not `bool?`)
+- `DialogResult = true/false` → `Close(true/false)`  
+- `DropShadowEffect` → `BoxShadow="0 0 12 0 #color"` on `Border`
+- `DispatcherTimer` → `Avalonia.Threading.DispatcherTimer` (same API)
+- `Application.Current.Dispatcher.Invoke` → `Dispatcher.UIThread.InvokeAsync`
+- `Button.Style = (Style)Resources["X"]` → `Button.Theme = (ControlTheme)Resources["X"]`; `Style = null` → `Theme = null`
+- `ControlTemplate.Triggers` → `Style Selector` pseudo-classes (`:pointerover`, `:pressed`, `:checked`)
+- `HwndSource` → `TryGetPlatformHandle()?.Handle` (wrap in `OperatingSystem.IsWindows()`)
+- `Win32 WndProc hook` → subclass via `SetWindowLongPtr` (see plan detail below)
+- `OpenFileDialog` → `await this.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions{...})`
+- `SaveFileDialog` → `await this.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions{...})`
+- `Clipboard.SetText(s)` → `await this.Clipboard!.SetTextAsync(s)`
+- `Clipboard.GetText()` → `await this.Clipboard!.GetTextAsync()`
+- `MessageBox.Show(...)` → `await MsgBox.Info(text, title, owner)` or `await MsgBox.Confirm(text, title, owner)`
+- `Canvas.SetLeft/Top` → same static methods in Avalonia
+- `DoubleTapped` replaces `MouseDoubleClick` for slider reset
+- `PointerPressed` replaces `MouseLeftButtonDown` for drag-to-move
+- `window.BeginMoveDrag(e)` replaces `DragMove()`
+- `FontWeight.SemiBold` → same in Avalonia
+- `ToolTip` attribute → `ToolTip.Tip` in Avalonia XAML
+- `IsSnapToTickEnabled` → `IsSnapToTicks`
+- `CheckBox.Checked/Unchecked` events → `IsCheckedChanged` (single event)
+
+### Win32 hotkey subclassing for Avalonia (Windows-only, for MainWindow)
+
+```csharp
+[DllImport("user32.dll")] static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, WndProcDelegate newProc);
+[DllImport("user32.dll")] static extern IntPtr CallWindowProc(IntPtr lpPrevWndFunc, IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+private WndProcDelegate? _wndProcDelegate; // must hold ref to prevent GC
+private IntPtr _originalWndProc;
+private IntPtr _hwnd;
+
+// In OnOpened:
+if (OperatingSystem.IsWindows())
+{
+    _hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+    if (_hwnd != IntPtr.Zero)
+    {
+        HotkeyManager.Register(_hwnd);
+        _wndProcDelegate = WndProc;
+        _originalWndProc = SetWindowLongPtr(_hwnd, -4, _wndProcDelegate); // GWL_WNDPROC = -4
+    }
+    DwmHelper.ApplyDarkTitlebar(_hwnd);
+}
+
+// WndProc method:
+private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+{
+    if (msg == HotkeyManager.WM_HOTKEY)
+    {
+        int id = wParam.ToInt32();
+        if (id == HotkeyManager.HK_TOGGLE)
+            Dispatcher.UIThread.InvokeAsync(() => { SetEqState(!_settings.EqEnabled, true); _settings.Save(); SyncMiniWindow(); });
+        else if (id == HotkeyManager.HK_CYCLE)
+            Dispatcher.UIThread.InvokeAsync(() => { CyclePreset(); SyncMiniWindow(); });
+        return IntPtr.Zero;
+    }
+    return CallWindowProc(_originalWndProc, hwnd, msg, wParam, lParam);
+}
+
+// In OnClosed:
+if (_hwnd != IntPtr.Zero) HotkeyManager.Unregister(_hwnd);
+```
+
+### Smoke test results (v3.0-beta, 2026-06-28)
+
+| Feature | Result |
+|---|---|
+| EQ toggle (ENABLE → DISABLE) | ✅ Pass |
+| Status pill text ("EQ ACTIVE" / "EQ OFF") | ✅ Pass |
+| Preset chip switching (FPS loads correct curve + visualizer) | ✅ Pass |
+| Settings panel open (all sections visible) | ✅ Pass |
+| Mini mode open (500×58 bar) | ✅ Pass |
+| Mini → Expand returns to main window | ✅ Pass |
+| Save Preset button | ❌ **Stack overflow crash** — see Known Issues below |
+
+### Known Issues (Avalonia port)
+
+**Save Preset button → `0xc00000fd` stack overflow in ntdll.dll**
+
+Root cause: `SavePresetDialog.ShowDialog<bool>(this)` triggers an Avalonia layout pass on the main window, which fires `SizeChanged` on `VisualizerCanvas`, which calls `PositionVizBars()`, which sets `Canvas.SetLeft/SetTop` and Width/Height on viz bars, triggering another layout pass → infinite recursion.
+
+Fix: add a reentrancy guard to `PositionVizBars()` in `MainWindow.axaml.cs`:
+
+```csharp
+private bool _positioningVizBars = false;
+
+private void PositionVizBars()
+{
+    if (_vizBars[0] == null) return;
+    if (_positioningVizBars) return;
+    _positioningVizBars = true;
+    try
+    {
+        double w = VisualizerCanvas.Bounds.Width;
+        double h = VisualizerCanvas.Bounds.Height;
+        if (w <= 0 || h <= 0) return;
+        // ... rest of method
+    }
+    finally { _positioningVizBars = false; }
+}
+```
+
+### Remaining packaging tasks
+
+1. Fix Save Preset stack overflow (see above), rebuild, re-smoke-test
+2. **Windows NSIS:** update `installer.nsi` to point at `GamingEqualizer.Avalonia/` publish output
+3. **macOS:** `dotnet publish -r osx-arm64 --self-contained` → wrap in `.app` bundle → `.dmg`
+4. **Linux:** `dotnet publish -r linux-x64 --self-contained` → `.AppImage`
+5. Delete WPF project `GamingEqualizer/`, rename `GamingEqualizer.Avalonia/` → `GamingEqualizer/`
+6. Update `dox/handoff.md` "Out of Scope" (remove Mac/Linux — now supported)

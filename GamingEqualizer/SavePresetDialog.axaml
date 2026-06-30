@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="GamingEqualizer.SavePresetDialog"
+        Title="Save Preset"
+        Width="320" Height="170"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        KeyDown="Window_KeyDown">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="SAVE PRESET"
+                   FontSize="14" FontWeight="Bold"
+                   Foreground="{DynamicResource AccentBrush}"
+                   Margin="0,0,0,14"/>
+
+        <TextBox x:Name="NameBox"
+                 Grid.Row="1"
+                 Margin="0,0,0,16"
+                 PlaceholderText="Preset name…"/>
+
+        <TextBlock x:Name="ErrorLabel"
+                   Grid.Row="2"
+                   Foreground="{DynamicResource ErrorBrush}"
+                   FontSize="11"
+                   IsVisible="False"
+                   VerticalAlignment="Top"
+                   TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel"
+                    Margin="0,0,8,0"
+                    Click="Cancel_Click"/>
+            <Button Content="Save"
+                    Theme="{StaticResource PrimaryButtonTheme}"
+                    Click="Save_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

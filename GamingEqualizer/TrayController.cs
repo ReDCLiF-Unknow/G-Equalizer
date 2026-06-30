@@ -1,78 +1,55 @@
-using System.Windows;
-using System.Windows.Forms;
+using Avalonia.Controls;
+using Avalonia.Platform;
 
 namespace GamingEqualizer;
 
 public class TrayController : IDisposable
 {
-    private readonly NotifyIcon _notifyIcon;
-    private readonly MainWindow _mainWindow;
-    private bool _disposed;
+    private readonly TrayIcon    _trayIcon;
+    private readonly MainWindow  _mainWindow;
+    private bool                 _disposed;
 
     public TrayController(MainWindow mainWindow)
     {
         _mainWindow = mainWindow;
 
-        _notifyIcon = new NotifyIcon
+        _trayIcon = new TrayIcon
         {
-            Text = "G Equalizer",
-            Visible = true
+            ToolTipText = "G Equalizer",
+            IsVisible   = true
         };
 
         LoadIcon(true);
-        BuildContextMenu();
 
-        _notifyIcon.DoubleClick += (_, _) => ShowWindow();
+        var openItem = new NativeMenuItem { Header = "Open" };
+        openItem.Click += (_, _) => Dispatcher.UIThread.InvokeAsync(ShowWindow);
+
+        var toggleItem = new NativeMenuItem { Header = "Toggle EQ" };
+        toggleItem.Click += (_, _) => Dispatcher.UIThread.InvokeAsync(_mainWindow.ToggleEqFromTray);
+
+        var quitItem = new NativeMenuItem { Header = "Quit" };
+        quitItem.Click += (_, _) => Dispatcher.UIThread.InvokeAsync(_mainWindow.BypassAndQuit);
+
+        var menu = new NativeMenu();
+        menu.Add(openItem);
+        menu.Add(toggleItem);
+        menu.Add(new NativeMenuItemSeparator());
+        menu.Add(quitItem);
+
+        _trayIcon.Menu    = menu;
+        _trayIcon.Clicked += (_, _) => Dispatcher.UIThread.InvokeAsync(ShowWindow);
     }
 
     private void LoadIcon(bool eqOn)
     {
-        var resourceName = eqOn ? "tray-icon-on.ico" : "tray-icon-off.ico";
-        var uri = new Uri($"pack://application:,,,/Assets/{resourceName}", UriKind.Absolute);
         try
         {
-            var stream = System.Windows.Application.GetResourceStream(uri)?.Stream;
-            if (stream != null)
-                _notifyIcon.Icon = new System.Drawing.Icon(stream);
-            else
-                _notifyIcon.Icon = SystemIcons.Application;
+            var name   = eqOn ? "tray-icon-on.ico" : "tray-icon-off.ico";
+            var uri    = new Uri($"avares://GamingEqualizer/Assets/{name}");
+            using var stream = AssetLoader.Open(uri);
+            _trayIcon.Icon = new WindowIcon(stream);
         }
-        catch
-        {
-            _notifyIcon.Icon = SystemIcons.Application;
-        }
-    }
-
-    private void BuildContextMenu()
-    {
-        var menu = new ContextMenuStrip();
-
-        var toggleItem = new ToolStripMenuItem("Toggle EQ");
-        toggleItem.Click += (_, _) =>
-        {
-            // Invoke on UI thread
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                _mainWindow.ToggleButton.RaiseEvent(
-                    new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            });
-        };
-
-        var openItem = new ToolStripMenuItem("Open");
-        openItem.Click += (_, _) => Application.Current.Dispatcher.Invoke(ShowWindow);
-
-        var quitItem = new ToolStripMenuItem("Quit");
-        quitItem.Click += (_, _) => Application.Current.Dispatcher.Invoke(() =>
-        {
-            _mainWindow.BypassAndQuit();
-        });
-
-        menu.Items.Add(openItem);
-        menu.Items.Add(toggleItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(quitItem);
-
-        _notifyIcon.ContextMenuStrip = menu;
+        catch { }
     }
 
     public void SetEqState(bool eqOn) => LoadIcon(eqOn);
@@ -81,9 +58,8 @@ public class TrayController : IDisposable
     {
         string status = eqOn ? "ON" : "OFF";
         string boost  = (boostEnabled && boostDb > 0) ? $" · Boost +{boostDb:F0}dB" : "";
-        // NotifyIcon.Text is capped at 63 chars by Windows
-        string text = $"G Equalizer [{status}] — {preset}{boost}";
-        _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+        string text   = $"G Equalizer [{status}] — {preset}{boost}";
+        _trayIcon.ToolTipText = text.Length > 63 ? text[..63] : text;
     }
 
     private void ShowWindow()
@@ -96,8 +72,8 @@ public class TrayController : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
-        _notifyIcon.Visible = false;
-        _notifyIcon.Dispose();
+        _disposed           = true;
+        _trayIcon.IsVisible = false;
+        _trayIcon.Dispose();
     }
 }

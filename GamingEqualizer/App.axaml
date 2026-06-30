@@ -1,0 +1,293 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="GamingEqualizer.App"
+             RequestedThemeVariant="Dark">
+
+    <!-- ControlThemes must be in Application.Resources, not Styles -->
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- ── Default Button ─────────────────────────────────────────── -->
+            <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
+                <Setter Property="Background"      Value="#0d0d1a"/>
+                <Setter Property="Foreground"      Value="#c4c4d0"/>
+                <Setter Property="BorderBrush"     Value="#252538"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding"         Value="12,6"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="FontSize"        Value="12"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="#44447a"/>
+                    <Setter Property="Background"  Value="#12122a"/>
+                </Style>
+                <Style Selector="^:pressed /template/ Border#Bd">
+                    <Setter Property="Background" Value="#1a1a35"/>
+                </Style>
+                <Style Selector="^:disabled">
+                    <Setter Property="Opacity" Value="0.35"/>
+                </Style>
+            </ControlTheme>
+
+            <!-- Primary button (deep violet) -->
+            <ControlTheme x:Key="PrimaryButtonTheme" TargetType="Button">
+                <Setter Property="Background"      Value="#5b21b6"/>
+                <Setter Property="BorderBrush"     Value="#7c3aed"/>
+                <Setter Property="Foreground"      Value="#ede9fe"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding"         Value="12,6"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="FontSize"        Value="12"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="Background"  Value="#6d28d9"/>
+                    <Setter Property="BorderBrush" Value="#a78bfa"/>
+                </Style>
+                <Style Selector="^:pressed /template/ Border#Bd">
+                    <Setter Property="Background" Value="#4c1d95"/>
+                </Style>
+                <Style Selector="^:disabled">
+                    <Setter Property="Opacity" Value="0.35"/>
+                </Style>
+            </ControlTheme>
+
+            <!-- Danger button (pink tint) -->
+            <ControlTheme x:Key="DangerButtonTheme" TargetType="Button">
+                <Setter Property="Background"      Value="#db277710"/>
+                <Setter Property="BorderBrush"     Value="#db277766"/>
+                <Setter Property="Foreground"      Value="#f472b6"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding"         Value="12,6"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="FontSize"        Value="12"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="Background" Value="#db27771a"/>
+                    <Setter Property="BorderBrush" Value="#f472b6"/>
+                </Style>
+            </ControlTheme>
+
+            <!-- Icon button (borderless, small) -->
+            <ControlTheme x:Key="IconButtonTheme" TargetType="Button">
+                <Setter Property="Background"      Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Foreground"      Value="#44445a"/>
+                <Setter Property="Padding"         Value="0"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd" Background="{TemplateBinding Background}" CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover">
+                    <Setter Property="Foreground" Value="#f472b6"/>
+                </Style>
+                <Style Selector="^:pressed">
+                    <Setter Property="Foreground" Value="#db2777"/>
+                </Style>
+            </ControlTheme>
+
+            <!-- Preset chip (ToggleButton) -->
+            <ControlTheme x:Key="ChipTheme" TargetType="ToggleButton">
+                <Setter Property="Background"      Value="Transparent"/>
+                <Setter Property="Foreground"      Value="#44445a"/>
+                <Setter Property="BorderBrush"     Value="#1e1e34"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding"         Value="14,5"/>
+                <Setter Property="Cursor"          Value="Hand"/>
+                <Setter Property="FontSize"        Value="12"/>
+                <Setter Property="Margin"          Value="4,0"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="20"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="#7c3aed55"/>
+                </Style>
+                <Style Selector="^:pointerover">
+                    <Setter Property="Foreground" Value="#8877cc"/>
+                </Style>
+                <Style Selector="^:checked /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="#7c3aed"/>
+                    <Setter Property="Background"  Value="#2d1060"/>
+                </Style>
+                <Style Selector="^:checked">
+                    <Setter Property="Foreground" Value="#c4b5fd"/>
+                </Style>
+            </ControlTheme>
+
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme/>
+
+        <!-- ── Palette ─────────────────────────────────────────────────── -->
+        <Style Selector="Window, UserControl">
+            <Style.Resources>
+                <SolidColorBrush x:Key="BackgroundBrush"    Color="#06060e"/>
+                <SolidColorBrush x:Key="AppSurfaceBrush"    Color="#0b0b16"/>
+                <SolidColorBrush x:Key="TitlebarBrush"      Color="#07070f"/>
+                <SolidColorBrush x:Key="SectionBgBrush"     Color="#08080f"/>
+                <SolidColorBrush x:Key="SurfaceBrush"       Color="#0d0d1a"/>
+                <SolidColorBrush x:Key="SectionBorderBrush" Color="#181828"/>
+                <SolidColorBrush x:Key="AccentBrush"        Color="#7c3aed"/>
+                <SolidColorBrush x:Key="AccentPinkBrush"    Color="#f472b6"/>
+                <SolidColorBrush x:Key="AccentTextBrush"    Color="#a78bfa"/>
+                <SolidColorBrush x:Key="TextBrush"          Color="#c4c4d0"/>
+                <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
+                <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
+                <SolidColorBrush x:Key="ErrorBrush"         Color="#db2777"/>
+            </Style.Resources>
+        </Style>
+
+        <!-- Global palette resources accessible app-wide -->
+        <Style Selector=":is(Control)">
+            <Style.Resources>
+                <SolidColorBrush x:Key="BackgroundBrush"    Color="#06060e"/>
+                <SolidColorBrush x:Key="AppSurfaceBrush"    Color="#0b0b16"/>
+                <SolidColorBrush x:Key="TitlebarBrush"      Color="#07070f"/>
+                <SolidColorBrush x:Key="SectionBgBrush"     Color="#08080f"/>
+                <SolidColorBrush x:Key="SurfaceBrush"       Color="#0d0d1a"/>
+                <SolidColorBrush x:Key="SectionBorderBrush" Color="#181828"/>
+                <SolidColorBrush x:Key="AccentBrush"        Color="#7c3aed"/>
+                <SolidColorBrush x:Key="AccentPinkBrush"    Color="#f472b6"/>
+                <SolidColorBrush x:Key="AccentTextBrush"    Color="#a78bfa"/>
+                <SolidColorBrush x:Key="TextBrush"          Color="#c4c4d0"/>
+                <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
+                <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
+                <SolidColorBrush x:Key="ErrorBrush"         Color="#db2777"/>
+            </Style.Resources>
+        </Style>
+
+        <!-- ── ScrollBar ──────────────────────────────────────────────────── -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Width"      Value="6"/>
+            <Setter Property="MinWidth"   Value="6"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ScrollBar /template/ Thumb">
+            <Setter Property="Background"   Value="#7c3aed"/>
+            <Setter Property="CornerRadius" Value="3"/>
+        </Style>
+        <Style Selector="ScrollBar /template/ Thumb:pointerover">
+            <Setter Property="Background" Value="#a78bfa"/>
+        </Style>
+        <Style Selector="ScrollBar /template/ Thumb:pressed">
+            <Setter Property="Background" Value="#f472b6"/>
+        </Style>
+
+        <!-- ── TextBox ────────────────────────────────────────────────────── -->
+        <Style Selector="TextBox">
+            <Setter Property="Background"      Value="#0d0d1a"/>
+            <Setter Property="Foreground"      Value="#c4c4d0"/>
+            <Setter Property="BorderBrush"     Value="#252538"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="CaretBrush"      Value="#a78bfa"/>
+            <Setter Property="CornerRadius"    Value="4"/>
+        </Style>
+        <Style Selector="TextBox:focus">
+            <Setter Property="BorderBrush" Value="#7c3aed99"/>
+        </Style>
+        <Style Selector="TextBox:pointerover">
+            <Setter Property="BorderBrush" Value="#7c3aed55"/>
+        </Style>
+
+        <!-- ── CheckBox ───────────────────────────────────────────────────── -->
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="#c4c4d0"/>
+            <Setter Property="Cursor"     Value="Hand"/>
+        </Style>
+
+        <!-- ── ComboBox ───────────────────────────────────────────────────── -->
+        <Style Selector="ComboBox">
+            <Setter Property="Background"      Value="#0d0d1a"/>
+            <Setter Property="Foreground"      Value="#c4c4d0"/>
+            <Setter Property="BorderBrush"     Value="#252538"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FontSize"        Value="12"/>
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#c4c4d0"/>
+        </Style>
+        <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#7c3aed1a"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#7c3aed2a"/>
+        </Style>
+
+        <!-- Class-based helpers for code-behind theme switching -->
+        <Style Selector="Button.primary">
+            <Setter Property="Theme" Value="{StaticResource PrimaryButtonTheme}"/>
+        </Style>
+        <Style Selector="Button.danger">
+            <Setter Property="Theme" Value="{StaticResource DangerButtonTheme}"/>
+        </Style>
+        <Style Selector="Button.icon">
+            <Setter Property="Theme" Value="{StaticResource IconButtonTheme}"/>
+        </Style>
+
+    </Application.Styles>
+</Application>
