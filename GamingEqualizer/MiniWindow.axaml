@@ -2,8 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="GamingEqualizer.MiniWindow"
         Title="G Equalizer"
-        Width="500" Height="58"
-        CanResize="False"
+        Width="640" Height="58"
+        MinWidth="400" MinHeight="58" MaxHeight="58"
+        CanResize="True"
         WindowDecorations="None"
         Topmost="True"
         WindowStartupLocation="CenterScreen"
@@ -47,8 +48,13 @@
             </Border>
 
             <!-- Preset chips -->
-            <StackPanel x:Name="MiniChipPanel" Grid.Column="2"
-                        Orientation="Horizontal" VerticalAlignment="Center"/>
+            <ScrollViewer Grid.Column="2"
+                          VerticalScrollBarVisibility="Disabled"
+                          HorizontalScrollBarVisibility="Auto"
+                          ClipToBounds="True">
+                <StackPanel x:Name="MiniChipPanel"
+                            Orientation="Horizontal" VerticalAlignment="Center"/>
+            </ScrollViewer>
 
             <!-- Action buttons -->
             <StackPanel Grid.Column="3" Orientation="Horizontal"

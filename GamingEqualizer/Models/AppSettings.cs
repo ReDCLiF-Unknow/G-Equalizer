@@ -18,6 +18,8 @@ public class AppSettings
     // 0 = Gradient, 1 = Solid, 2 = Peak Glow
     public int VizColorMode { get; set; } = 0;
     public bool AutoPresetEnabled { get; set; } = false;
+    public double WindowWidth { get; set; } = 820;
+    public double WindowHeight { get; set; } = 610;
     public Dictionary<string, string> ProcessPresetMap { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["cs2.exe"]                        = "FPS",

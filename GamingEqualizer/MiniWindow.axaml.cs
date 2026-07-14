@@ -44,6 +44,8 @@ public partial class MiniWindow : Window
 
     private void BuildChips()
     {
+        MiniChipPanel.Children.Clear();
+        _chips.Clear();
         foreach (var preset in _presetManager.Presets)
         {
             string name = preset.Name;
@@ -100,6 +102,7 @@ public partial class MiniWindow : Window
 
     private void StartPulse()
     {
+        _pulseTimer?.Stop();
         _pulseTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         _pulseTimer.Tick += (_, _) =>
         {

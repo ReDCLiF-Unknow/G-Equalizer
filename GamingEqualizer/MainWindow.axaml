@@ -4,7 +4,7 @@
         Title="G Equalizer"
         Width="820" Height="610"
         MinWidth="740" MinHeight="560"
-        CanResize="False"
+        CanResize="True"
         Background="{DynamicResource BackgroundBrush}"
         Foreground="{DynamicResource TextBrush}"
         Icon="avares://GamingEqualizer/Assets/app-icon.ico">
@@ -110,10 +110,10 @@
                     BorderThickness="0,0,0,1">
                 <Grid Margin="16,8,16,4">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Grid Grid.Row="0">
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
                         <TextBlock Text="FREQUENCY RESPONSE"
                                    FontSize="10" FontWeight="Bold"
                                    Foreground="{DynamicResource MutedTextBrush}"
@@ -214,12 +214,31 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="SETTINGS"
-                               FontSize="18" FontWeight="Bold"
-                               Foreground="{DynamicResource AccentBrush}"
-                               Margin="0,0,0,16"/>
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="SETTINGS"
+                                   Grid.Column="0"
+                                   FontSize="18" FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentBrush}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                            <Button x:Name="ScrollUpButton"
+                                    Content="▲"
+                                    Theme="{StaticResource IconButtonTheme}"
+                                    ToolTip.Tip="Scroll up (for mice without a working scroll wheel)"
+                                    Click="ScrollUpButton_Click"/>
+                            <Button x:Name="ScrollDownButton"
+                                    Content="▼"
+                                    Theme="{StaticResource IconButtonTheme}"
+                                    ToolTip.Tip="Scroll down (for mice without a working scroll wheel)"
+                                    Click="ScrollDownButton_Click"/>
+                        </StackPanel>
+                    </Grid>
 
-                    <ScrollViewer Grid.Row="1"
+                    <ScrollViewer x:Name="SettingsScrollViewer"
+                                  Grid.Row="1"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Padding="0,0,10,0">

@@ -114,6 +114,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         _settings = AppSettings.Load();
         _presetManager.Load();
+
+        Width  = Math.Max(MinWidth,  _settings.WindowWidth);
+        Height = Math.Max(MinHeight, _settings.WindowHeight);
     }
 
     protected override void OnOpened(EventArgs e)
@@ -132,12 +135,21 @@ public partial class MainWindow : Window
 
         if (OperatingSystem.IsWindows())
         {
-            _hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-            if (_hwnd != IntPtr.Zero)
+            var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+            if (hwnd != IntPtr.Zero)
             {
-                HotkeyManager.Register(_hwnd);
-                _wndProcDelegate = WndProc;
-                _originalWndProc = SetWindowLongPtr(_hwnd, -4, _wndProcDelegate);
+                HotkeyManager.Register(hwnd);
+
+                // OnOpened can fire more than once for the same window (e.g. hide-to-tray
+                // then restore). Only subclass the WndProc once per hwnd — re-subclassing
+                // would make SetWindowLongPtr return our own WndProc thunk as the "previous"
+                // proc, so CallWindowProc would call back into WndProc forever (stack overflow).
+                if (_hwnd != hwnd)
+                {
+                    _hwnd = hwnd;
+                    _wndProcDelegate = WndProc;
+                    _originalWndProc = SetWindowLongPtr(_hwnd, -4, _wndProcDelegate);
+                }
             }
             DwmHelper.ApplyDarkTitlebar(_hwnd);
         }
@@ -148,6 +160,14 @@ public partial class MainWindow : Window
         if (_hwnd != IntPtr.Zero) HotkeyManager.Unregister(_hwnd);
         _autoPresetTimer?.Stop();
         _spectrum?.Dispose();
+
+        if (WindowState == WindowState.Normal)
+        {
+            _settings.WindowWidth  = Width;
+            _settings.WindowHeight = Height;
+            _settings.Save();
+        }
+
         base.OnClosed(e);
     }
 
@@ -228,6 +248,7 @@ public partial class MainWindow : Window
 
     private void BuildSliders()
     {
+        SliderGrid.Children.Clear();
         for (int i = 0; i < 10; i++)
         {
             int    idx   = i;
@@ -354,6 +375,8 @@ public partial class MainWindow : Window
 
     private void BuildPresetChips()
     {
+        ChipPanel.Children.Clear();
+        _chips.Clear();
         _presetManager.Presets.ToList().ForEach(p => AddChip(p.Name, onClick: () => OnChipClick(p.Name)));
         AddChip("Custom", onClick: null);
     }
@@ -587,6 +610,14 @@ public partial class MainWindow : Window
         string preset = string.IsNullOrEmpty(_settings.ActivePreset) ? "Custom" : _settings.ActivePreset;
         _tray?.UpdateTooltip(preset, _settings.EqEnabled, _settings.BoostEnabled, _settings.BoostDb);
     }
+
+    private const double SettingsScrollStep = 60;
+
+    private void ScrollUpButton_Click(object? sender, RoutedEventArgs e)
+        => SettingsScrollViewer.Offset = new Vector(SettingsScrollViewer.Offset.X, Math.Max(0, SettingsScrollViewer.Offset.Y - SettingsScrollStep));
+
+    private void ScrollDownButton_Click(object? sender, RoutedEventArgs e)
+        => SettingsScrollViewer.Offset = new Vector(SettingsScrollViewer.Offset.X, Math.Min(SettingsScrollViewer.Extent.Height - SettingsScrollViewer.Viewport.Height, SettingsScrollViewer.Offset.Y + SettingsScrollStep));
 
     private void SettingsButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -1041,6 +1072,7 @@ public partial class MainWindow : Window
 
     private void StartPulse()
     {
+        _pulseTimer?.Stop();
         _pulseTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         _pulseTimer.Tick += (_, _) =>
         {
@@ -1055,6 +1087,9 @@ public partial class MainWindow : Window
 
     private void BuildVisualizer()
     {
+        VisualizerCanvas.Children.Clear();
+        _vizTimer?.Stop();
+
         _vizCenter = new Rectangle
         {
             Height = 1,

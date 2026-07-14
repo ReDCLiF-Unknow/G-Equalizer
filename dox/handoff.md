@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-06-30 (v3.0.0 — Avalonia migration complete)
+**Date:** 2026-07-01 (v3.0.0 — Avalonia migration complete. Stack-overflow crash regression **diagnosed and fixed** this session, plus follow-on UX fixes — see "Avalonia Migration" section at the bottom for full detail)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -17,7 +17,7 @@ Key features:
 - Per-ear hearing calibration wizard (left/right separately via NAudio panning + sine tones); per-band re-test on results screen
 - Real-time frequency visualizer (80-bar WASAPI loopback + FFT, or EQ-mode animation); 3 color modes: Gradient / Solid / Peak Glow
 - AutoEQ headphone correction import (parametric .txt → blended 10-band preset)
-- Mini / compact always-on-top widget (500×58 px)
+- Mini / compact always-on-top widget (640×58 px default, resizable 400–any×58, horizontally-scrollable preset chip row)
 - Global hotkeys: Ctrl+Alt+E (toggle), Ctrl+Alt+P (cycle preset)
 - First-run onboarding walkthrough (4-step modal)
 - Sound Boost: 0–20 dB preamp boost, toggle button in titlebar + slider in Settings, real-time apply
@@ -27,7 +27,7 @@ Key features:
 
 ## Current Status
 
-**v3.0.0 released.** Avalonia cross-platform build. Installer and EXE in `dist/`.
+**v3.0.0 released.** Avalonia cross-platform build. Installer and EXE in `dist/`, rebuilt 2026-07-01 with the stack-overflow fix, duplicate-UI-builder fixes, resizable main window, Settings scroll buttons, and Mini widget overlap fix. All four platform artifacts (Windows installer, macOS arm64/x64, Linux x64) are current as of the latest rebuild.
 
 | Phase | Status |
 |---|---|
@@ -285,7 +285,11 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
 
-**Where to start next session:** v3.0.0 complete. All three platforms built and packaged. Remaining Mac/Linux work: (1) on macOS — run `iconutil` to generate `.icns` and `hdiutil` to produce a `.dmg`; (2) on Linux — use `appimagetool` for `.AppImage`. The EQ backends (`MacEQBackend`, `LinuxEQBackend`) are implemented and need real-device smoke testing.
+**Where to start next session:** ✅ The stack-overflow regression is fixed and confirmed via live manual testing (repeated tray hide/restore, no crash — see "Avalonia Migration" section below for the root cause and fix). Also fixed this session: duplicate preset chips/sliders/visualizer bars on `OnOpened` re-fire, leaked `DispatcherTimer`s, non-resizable main window, no scroll-wheel-free way to navigate Settings, and Mini widget preset chips overlapping the ON/OFF switch on narrower/high-DPI displays. All four distribution artifacts have been rebuilt with every fix from this session.
+
+Note: automated UI click-testing via computer-use tools does not work on this build — the app's `requireAdministrator` manifest triggers Windows UIPI, which silently blocks simulated mouse/keyboard input to elevated windows. Manual clicking is required for any further live verification.
+
+Remaining packaging steps: macOS `.dmg` (`dist/make-dmg.sh`, needs real Mac) and Linux `.AppImage` (`dist/make-appimage.sh`, needs real Linux). The EQ backends (`MacEQBackend`, `LinuxEQBackend`) are implemented but need real-device smoke testing — the current macOS/Linux archives are cross-published from Windows and unverified on real hardware.
 
 ---
 
@@ -404,38 +408,61 @@ if (_hwnd != IntPtr.Zero) HotkeyManager.Unregister(_hwnd);
 | Mini → Expand returns to main window | ✅ Pass |
 | Save Preset button | ❌ **Stack overflow crash** — see Known Issues below |
 
-### Known Issues (Avalonia port)
+### Known Issues (Avalonia port) — ✅ RESOLVED 2026-07-01
 
-**Save Preset button → `0xc00000fd` stack overflow in ntdll.dll**
+**Stack overflow (`0xc00000fd`) — history of the regression and the actual fix, kept for reference.**
 
-Root cause: `SavePresetDialog.ShowDialog<bool>(this)` triggers an Avalonia layout pass on the main window, which fires `SizeChanged` on `VisualizerCanvas`, which calls `PositionVizBars()`, which sets `Canvas.SetLeft/SetTop` and Width/Height on viz bars, triggering another layout pass → infinite recursion.
+Original root cause (2026-06-28): `SavePresetDialog.ShowDialog<bool>(this)` triggers an Avalonia layout pass on the main window, which fires `SizeChanged` on `VisualizerCanvas`, which calls `PositionVizBars()`, which sets `Canvas.SetLeft/SetTop` and Width/Height on viz bars, triggering another layout pass → infinite recursion.
 
-Fix: add a reentrancy guard to `PositionVizBars()` in `MainWindow.axaml.cs`:
+Applied fix: added a reentrancy guard (`_positioningVizBars` bool) around the body of `PositionVizBars()` in `MainWindow.axaml.cs`. Verified present in the compiled binary (`dist/app/GamingEqualizer.exe`, confirmed via string search — `PositionVizBars`, `positioningVizBars`, and `MacEQBackend` all found in the exe, so this is the current build).
 
-```csharp
-private bool _positioningVizBars = false;
+**Despite the fix being in the shipped binary, the app crashed again** with the identical exception code `0xc00000fd` (STATUS_STACK_OVERFLOW) in `ntdll.dll`, twice:
+- 2026-06-30 23:57:48 — Fault offset `0x96b4e`
+- 2026-07-01 18:02:20 — Fault offset `0x96bea` (crashed spontaneously — user was not actively clicking Save Preset at the time, just had the app open)
 
-private void PositionVizBars()
-{
-    if (_vizBars[0] == null) return;
-    if (_positioningVizBars) return;
-    _positioningVizBars = true;
-    try
-    {
-        double w = VisualizerCanvas.Bounds.Width;
-        double h = VisualizerCanvas.Bounds.Height;
-        if (w <= 0 || h <= 0) return;
-        // ... rest of method
-    }
-    finally { _positioningVizBars = false; }
-}
-```
+This means either:
+1. The reentrancy guard doesn't cover the actual recursive path (there may be a second, different infinite-layout loop not going through `PositionVizBars`), or
+2. The crash is unrelated to Save Preset entirely and is a general Avalonia layout recursion triggered by something else (window resize, mini-mode toggle, timer tick racing with layout, etc.)
+
+**Diagnostic assets available for next session:**
+- Windows generated crash dumps at `%LOCALAPPDATA%\CrashDumps\GamingEqualizer.exe.*.dmp` — 5 dumps found spanning 2026-06-28 through 2026-07-01, including the two most recent regressions.
+- `dotnet-dump` global tool was installed (`dotnet tool install --global dotnet-dump`) specifically to analyze these dumps with `dotnet-dump analyze <dump> --command "clrstack"` for a managed call stack — **this analysis was started but not completed/reviewed**. This is the fastest next step to find the real recursive call chain.
+- `%AppData%\GamingEqualizer\error.log` was checked and only contains old, unrelated EqualizerAPO config-write permission errors (2026-06-23 to 2026-06-25) — no useful signal for this crash.
+
+**RESOLVED (2026-07-01):** `dotnet-dump analyze GamingEqualizer.exe.8132.dmp --command clrstack` showed the real recursion — it was never in `PositionVizBars`. The managed stack was thousands of frames of `WndProc → CallWindowProc → WndProc → CallWindowProc → ...`, i.e. the Win32 hotkey subclassing in `MainWindow.axaml.cs` was calling itself forever.
+
+Root cause: `OnOpened()` re-runs the subclassing block (`SetWindowLongPtr(_hwnd, -4, _wndProcDelegate)`) every time the window is opened/shown — not just on first launch. `OnOpened` can fire more than once for the same `hwnd` (e.g. hide-to-tray then restore). On the second call, `SetWindowLongPtr` returns the *currently installed* proc as "previous" — which by then is our own `WndProc` thunk from the first subclass — and that got stored into `_originalWndProc`, overwriting the real original. From then on `CallWindowProc(_originalWndProc, ...)` called back into `WndProc` itself, recursing until the stack overflowed (`0xc00000fd`). This explains both the Save Preset crash and the "spontaneous" crash with no user interaction (any tray hide/restore cycle would trigger it).
+
+Fix applied: guarded the subclassing block in `OnOpened` (`MainWindow.axaml.cs`) so it only runs once per hwnd (`if (_hwnd != hwnd) { ... }`), using a local `hwnd` variable and only assigning `_hwnd`/subclassing inside the guard. `HotkeyManager.Register(hwnd)` and `DwmHelper.ApplyDarkTitlebar` still run every time `OnOpened` fires (safe/idempotent), only the `SetWindowLongPtr` subclass call is now one-shot.
+
+**Related bug found during live testing:** confirming `OnOpened` really does re-fire (tray hide/restore) surfaced a second class of bug — several `OnOpened`-driven builder methods in `MainWindow.axaml.cs` were not idempotent:
+- `BuildPresetChips()` appended to `ChipPanel.Children`/`_chips` without clearing first → duplicated preset chip row on every restore from tray (visually confirmed: "Cinematic, Flat, FPS, Music, RPG, Custom, Cinematic, Flat, ..."). Fixed: clear `ChipPanel.Children` and `_chips` at the top of the method.
+- `BuildSliders()` appended to `SliderGrid.Children` without clearing → duplicate slider columns. Fixed: clear `SliderGrid.Children` first.
+- `BuildVisualizer()` appended to `VisualizerCanvas.Children` without clearing, and started a new `DispatcherTimer` every call without stopping the previous one → duplicate viz bars plus leaked ever-accumulating timers ticking in the background. Fixed: clear `VisualizerCanvas.Children` and `_vizTimer?.Stop()` before rebuilding.
+- `StartPulse()` had the same leaked-timer pattern (`_pulseTimer` recreated without stopping the old one). Fixed: `_pulseTimer?.Stop()` before reassigning.
+- `RefreshAutoPresetTimer()` already guarded against re-creation (`if (_autoPresetTimer == null)`) — left as-is.
+
+Republished (`dotnet publish` win-x64 self-contained single-file) and rebuilt `GEqualizer-Setup-3.0.0.exe` with all of the above fixes. Live smoke test done (2026-07-01): repeated tray hide/restore, preset chips stayed as a single clean row, no crash, Save Preset worked. **Confirmed fixed.**
+
+Since the duplicate-builder bug (`BuildPresetChips`/`BuildSliders`/`BuildVisualizer`/`StartPulse`) lives in shared cross-platform code, not a Windows-only path, the macOS and Linux archives (built 2026-06-30, before this fix) were also stale. Cross-published and repackaged all four distribution artifacts from this Windows machine via `dotnet publish -r <rid> --self-contained true -p:PublishSingleFile=true`:
+- `GEqualizer-Setup-3.0.0.exe` (win-x64, NSIS installer)
+- `GEqualizer-macOS-arm64-3.0.0.zip` / `GEqualizer-macOS-x64-3.0.0.zip` — `.app` bundle reassembled by hand (Info.plist + AppIcon.icns + publish output under `Contents/MacOS`), matching the structure of the previous release zips. Not smoke-tested (no Mac hardware available) — the underlying WndProc/hotkey fix is Windows-only anyway and doesn't apply here, but the duplicate-builder fix does.
+- `GEqualizer-linux-x64-3.0.0.tar.gz` — same publish + repack, not smoke-tested (no Linux hardware available).
+
+**2026-07-01, later same day — additional UX fixes, all four artifacts rebuilt again:**
+- Main window is now resizable (`CanResize="True"`, `MinWidth="740" MinHeight="560"`). Size persists to `AppSettings.WindowWidth`/`WindowHeight`, restored on next launch, saved in `OnClosed` (only when `WindowState == Normal`).
+- Settings panel: added ▲/▼ buttons next to the "SETTINGS" header (`ScrollUpButton_Click`/`ScrollDownButton_Click` in `MainWindow.axaml.cs`) that page the `SettingsScrollViewer` by a fixed step — for users without a working scroll wheel.
+- Mini widget: preset chip row was overflowing past the ON/OFF button on some displays (bug report: "RPG preset goes under on/off switch"). Root cause: 500px default width wasn't enough for 6 chips + logo + status pill + buttons, and the `StackPanel` holding the chips wasn't clipped, so overflow rendered on top of the button. Fixed by wrapping the chip `StackPanel` in a `ScrollViewer` (`ClipToBounds="True"`, `HorizontalScrollBarVisibility="Auto"`) and widening the window (500→640 default, 360→400 min, `CanResize="True"`). Also applied the same defensive fixes as `MainWindow` (`BuildChips`/`StartPulse` in `MiniWindow.axaml.cs` now clear/stop before rebuilding, since `OnOpened` can re-fire there too).
+- Rebuilt and repackaged all four distribution artifacts with these fixes.
+
+**2026-07-01, later still — visualizer header text clipping fix, all four artifacts rebuilt again:**
+- "◈ GRADIENT/PEAK GLOW" and "○ LIVE" buttons above the frequency visualizer had their text clipped at the top. Root cause: the header row in `MainWindow.axaml` (`Grid.Row="2"` visualizer section) was hardcoded to `Height="16"`, too short for the buttons' font + padding + border. Fixed by changing that `RowDefinition` to `Height="Auto"`. Rebuilt and repackaged all four distribution artifacts.
 
 ### Remaining packaging tasks
 
-1. Fix Save Preset stack overflow (see above), rebuild, re-smoke-test
-2. **Windows NSIS:** update `installer.nsi` to point at `GamingEqualizer.Avalonia/` publish output
-3. **macOS:** `dotnet publish -r osx-arm64 --self-contained` → wrap in `.app` bundle → `.dmg`
-4. **Linux:** `dotnet publish -r linux-x64 --self-contained` → `.AppImage`
-5. Delete WPF project `GamingEqualizer/`, rename `GamingEqualizer.Avalonia/` → `GamingEqualizer/`
-6. Update `dox/handoff.md` "Out of Scope" (remove Mac/Linux — now supported)
+1. **Diagnose and fix the stack-overflow regression (see above) — do not assume the old fix is sufficient**, rebuild, re-smoke-test
+2. **Windows NSIS:** installer already updated to point at the Avalonia project output — done, but installer/exe still carries the crash bug above
+3. **macOS:** published + packaged as `.app`/`.zip` — `.dmg` step still needs `hdiutil` on real macOS hardware (see `dist/make-dmg.sh`)
+4. **Linux:** published + packaged as `.tar.gz` — `.AppImage` step still needs `appimagetool` on real Linux hardware (see `dist/make-appimage.sh`)
+5. WPF project deleted, `GamingEqualizer.Avalonia/` renamed to `GamingEqualizer/` — done
+6. `dox/handoff.md` "Out of Scope" updated (Mac/Linux removed) — done
