@@ -1,6 +1,6 @@
 # G Equalizer — Handoff Document
 
-**Date:** 2026-07-01 (v3.0.0 — Avalonia migration complete. Stack-overflow crash regression **diagnosed and fixed** this session, plus follow-on UX fixes — see "Avalonia Migration" section at the bottom for full detail)
+**Date:** 2026-07-14 (v3.0.0 — Avalonia migration complete, stack-overflow crash regression diagnosed and fixed — see "Avalonia Migration" section at the bottom for full detail. This session: added a PUBG preset (not yet in any rebuilt dist artifact); built a marketing landing page concept at `website/index.html` — see "Website" section near the bottom for design direction and what's still open.)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
 **Branch:** main
 
@@ -13,7 +13,7 @@ A Windows desktop app (C# / WPF / .NET 10) that applies system-wide audio equali
 Key features:
 - 10-band EQ (32Hz–16kHz, ±12 dB per band) with per-band tooltips; double-click any slider to reset to 0 dB
 - On/off toggle from the app or system tray
-- Gaming presets: FPS, RPG, Cinematic, Music, Flat + custom presets (save/import/export)
+- Gaming presets: FPS, RPG, Cinematic, Music, Flat, PUBG + custom presets (save/import/export)
 - Per-ear hearing calibration wizard (left/right separately via NAudio panning + sine tones); per-band re-test on results screen
 - Real-time frequency visualizer (80-bar WASAPI loopback + FFT, or EQ-mode animation); 3 color modes: Gradient / Solid / Peak Glow
 - AutoEQ headphone correction import (parametric .txt → blended 10-band preset)
@@ -79,7 +79,7 @@ GamingEqualizer/                (Avalonia — cross-platform)
     Preset.cs
     HearingProfile.cs
   Presets/
-    FPS.json / RPG.json / Cinematic.json / Flat.json / Music.json
+    FPS.json / RPG.json / Cinematic.json / Flat.json / Music.json / PUBG.json
   Assets/
     app-icon.ico                Custom shield + EQ bars design, purple→pink, multi-size (16/32/48/256px)
     app-icon-backup.ico         Original placeholder icon (kept for reference)
@@ -271,6 +271,16 @@ None. All previously known issues are resolved.
 
 ---
 
+## Website (concept built, not deployed)
+
+- **Location:** `website/index.html` — plain static HTML/CSS, no build tooling, no external dependencies (fonts, JS libs). Single file.
+- **Design direction:** hardware-faceplate / spec-sheet aesthetic rather than a generic SaaS gradient hero — near-black violet ground (`#0a0912`), violet→pink accent (`#8858f2`→`#ef4d95`), mono type for every number (Hz/dB/MB) like a piece of audio gear. Both light and dark themes implemented via CSS custom properties (`prefers-color-scheme` + `data-theme` override).
+- **Sections (built, in order):** sticky nav → hero with a live SVG frequency-response curve using the actual PUBG preset band data (real product data, not decorative) → feature list as a spec-table (name / description / mono figure) → demo section with a hand-built CSS recreation of the real app chrome (preset chips, visualizer bars, sliders — no screenshot exists yet, so this stays visually true to the actual product instead of stock imagery) → download section with 3 platform cards named after the real `dist/` artifacts → footer.
+- **Still placeholder:** all download links and the GitHub link are `href="#"` — need real URLs once the site has somewhere to actually serve the installer/zip/tarball from (GitHub Releases is the natural fit given the artifacts already exist in `dist/`).
+- **Not decided yet:** hosting (GitHub Pages / Netlify / Vercel), domain name, whether to add a changelog/blog page later (would push toward Astro instead of plain HTML if so).
+
+---
+
 ## v3 Planning
 
 Full spec: [v3-concept.md](v3-concept.md)
@@ -284,6 +294,7 @@ Full spec: [v3-concept.md](v3-concept.md)
 | Calibration re-test individual bands | Medium | Medium | **Done** | Results screen grid with ↻ L / ↻ R per frequency |
 | Visualizer color mode toggle | Low | Low | **Done** | Gradient / Solid / Peak Glow — "◈" button next to LIVE |
 | Auto-preset switching | Low | High | **Done** | `DispatcherTimer` polls `GetForegroundWindow` → process name every 2s. Editable exe→preset map in Settings → AUTO-PRESET SWITCHING section. Toggle to enable/disable. Tray tooltip updates on switch. |
+| PUBG preset (louder footsteps) | Medium | Low | **Done** | `Presets/PUBG.json` — bands `[-3, -4, -2, -1, 1, 4, 6, 7, 5, 2]` (32Hz–16kHz). Cuts rumbling bass that masks footstep audio, boosts 1k–8kHz (peak +7dB at 4kHz) where footstep surface texture/directional transients live. Registered in `BuiltInPresets` (protected from deletion) in `MainWindow.axaml.cs`. Default auto-preset-switching map now includes `TslGame.exe → PUBG` in `AppSettings.cs`. **Not yet rebuilt into dist artifacts** — only a Debug build has been run/smoke-launched so far. |
 
 **Where to start next session:** ✅ The stack-overflow regression is fixed and confirmed via live manual testing (repeated tray hide/restore, no crash — see "Avalonia Migration" section below for the root cause and fix). Also fixed this session: duplicate preset chips/sliders/visualizer bars on `OnOpened` re-fire, leaked `DispatcherTimer`s, non-resizable main window, no scroll-wheel-free way to navigate Settings, and Mini widget preset chips overlapping the ON/OFF switch on narrower/high-DPI displays. All four distribution artifacts have been rebuilt with every fix from this session.
 
@@ -460,9 +471,9 @@ Since the duplicate-builder bug (`BuildPresetChips`/`BuildSliders`/`BuildVisuali
 
 ### Remaining packaging tasks
 
-1. **Diagnose and fix the stack-overflow regression (see above) — do not assume the old fix is sufficient**, rebuild, re-smoke-test
-2. **Windows NSIS:** installer already updated to point at the Avalonia project output — done, but installer/exe still carries the crash bug above
-3. **macOS:** published + packaged as `.app`/`.zip` — `.dmg` step still needs `hdiutil` on real macOS hardware (see `dist/make-dmg.sh`)
-4. **Linux:** published + packaged as `.tar.gz` — `.AppImage` step still needs `appimagetool` on real Linux hardware (see `dist/make-appimage.sh`)
+1. ~~Diagnose and fix the stack-overflow regression~~ — ✅ done 2026-07-01, confirmed via live testing, rebuilt into all four artifacts (see resolution above).
+2. **Windows NSIS:** installer up to date with the Avalonia project output and every fix through 2026-07-01 (crash fix, duplicate-builder fixes, resizable window, Settings scroll buttons, Mini widget fix, visualizer header fix). **Does not yet include the PUBG preset** (added later, only smoke-tested in a Debug build) — needs a republish + reinstall before shipping.
+3. **macOS:** published + packaged as `.app`/`.zip`, cross-published from Windows and unverified on real hardware. `.dmg` step still needs `hdiutil` on real macOS hardware (see `dist/make-dmg.sh`). Also missing the PUBG preset, same as Windows.
+4. **Linux:** published + packaged as `.tar.gz`, unverified on real hardware. `.AppImage` step still needs `appimagetool` on real Linux hardware (see `dist/make-appimage.sh`). Also missing the PUBG preset.
 5. WPF project deleted, `GamingEqualizer.Avalonia/` renamed to `GamingEqualizer/` — done
 6. `dox/handoff.md` "Out of Scope" updated (Mac/Linux removed) — done

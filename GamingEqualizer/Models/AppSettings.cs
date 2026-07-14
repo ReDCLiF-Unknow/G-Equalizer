@@ -26,6 +26,7 @@ public class AppSettings
         ["r5apex.exe"]                     = "FPS",
         ["VALORANT-Win64-Shipping.exe"]    = "FPS",
         ["RainbowSix.exe"]                 = "FPS",
+        ["TslGame.exe"]                    = "PUBG",
         ["Spotify.exe"]                    = "Music",
     };
 

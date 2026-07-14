@@ -1320,7 +1320,7 @@ public partial class MainWindow : Window
     }
 
     private static readonly HashSet<string> BuiltInPresets =
-        new(StringComparer.OrdinalIgnoreCase) { "Flat", "FPS", "RPG", "Cinematic", "Music" };
+        new(StringComparer.OrdinalIgnoreCase) { "Flat", "FPS", "RPG", "Cinematic", "Music", "PUBG" };
 
     private void DeletePresetChip(string name)
     {
