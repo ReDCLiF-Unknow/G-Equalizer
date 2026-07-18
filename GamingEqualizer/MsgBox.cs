@@ -6,10 +6,10 @@ namespace GamingEqualizer;
 
 public static class MsgBox
 {
-    public static async Task Info(string text, string title = "G Equalizer", Window? owner = null)
+    public static async Task Info(string text, string title = "G-EQ", Window? owner = null)
         => await Show(text, title, false, owner);
 
-    public static async Task<bool> Confirm(string text, string title = "G Equalizer", Window? owner = null)
+    public static async Task<bool> Confirm(string text, string title = "G-EQ", Window? owner = null)
         => await Show(text, title, true, owner);
 
     private static async Task<bool> Show(string text, string title, bool confirm, Window? owner)

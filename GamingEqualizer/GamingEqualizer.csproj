@@ -6,6 +6,9 @@
     <AssemblyName>GamingEqualizer</AssemblyName>
     <RootNamespace>GamingEqualizer</RootNamespace>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <AssemblyTitle>G-EQ</AssemblyTitle>
+    <Product>G-EQ</Product>
+    <Description>G-EQ</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ImplicitUsings>enable</ImplicitUsings>

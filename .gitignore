@@ -10,6 +10,11 @@ packages/
 
 # Publish
 publish/
+dist/app/
 
 # Logs (generated at runtime, not tracked)
 *.log
+
+# Claude Code local session state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

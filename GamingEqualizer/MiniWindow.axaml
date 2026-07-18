@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="GamingEqualizer.MiniWindow"
-        Title="G Equalizer"
+        Title="G-EQ"
         Width="640" Height="58"
         MinWidth="400" MinHeight="58" MaxHeight="58"
         CanResize="True"

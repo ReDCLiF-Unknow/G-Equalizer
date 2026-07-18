@@ -15,7 +15,7 @@ public class TrayController : IDisposable
 
         _trayIcon = new TrayIcon
         {
-            ToolTipText = "G Equalizer",
+            ToolTipText = "G-EQ",
             IsVisible   = true
         };
 
@@ -58,7 +58,7 @@ public class TrayController : IDisposable
     {
         string status = eqOn ? "ON" : "OFF";
         string boost  = (boostEnabled && boostDb > 0) ? $" · Boost +{boostDb:F0}dB" : "";
-        string text   = $"G Equalizer [{status}] — {preset}{boost}";
+        string text   = $"G-EQ [{status}] — {preset}{boost}";
         _trayIcon.ToolTipText = text.Length > 63 ? text[..63] : text;
     }
 

@@ -20,7 +20,7 @@ chmod +x "$APPDIR/usr/bin/GamingEqualizer"
 # AppImage desktop entry
 cat > "$APPDIR/GEqualizer.desktop" <<'EOF'
 [Desktop Entry]
-Name=G Equalizer
+Name=G-EQ
 Exec=GamingEqualizer
 Icon=GEqualizer
 Type=Application

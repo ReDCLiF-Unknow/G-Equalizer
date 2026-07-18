@@ -1,16 +1,18 @@
-; G Equalizer — All-in-one Installer
-; Installs EqualizerAPO (downloads at install time) then G Equalizer.
+; G-EQ — All-in-one Installer
+; Installs EqualizerAPO (downloads at install time) then G-EQ.
 ;
 ; Requirements:
 ;   NSIS 3.x          https://nsis.sourceforge.io/Download
-;   inetc plugin      https://nsis.sourceforge.io/Inetc_plug-in
-;     → drop Inetc\Plugins\x86-unicode\INetC.dll into NSIS\Plugins\x86-unicode\
+;   inetc plugin      vendored in nsis-plugins/x86-unicode/INetC.dll (no
+;                      Program Files write access needed to build)
 ;
 ; Build: makensis installer.nsi
 
 Unicode True
 
-!define APP_NAME       "G Equalizer"
+!addplugindir /x86-unicode "nsis-plugins\x86-unicode"
+
+!define APP_NAME       "G-EQ"
 !define APP_EXE        "GamingEqualizer.exe"
 !define APP_VERSION    "3.0.0"
 !define PUBLISHER      "ReDCLiF"
@@ -21,7 +23,7 @@ Unicode True
 !define EQAPO_TMP      "$TEMP\EqualizerAPO64-1.3.exe"
 
 Name          "${APP_NAME} Setup"
-OutFile       "GEqualizer-Setup-${APP_VERSION}.exe"
+OutFile       "G-EQ-Setup-${APP_VERSION}.exe"
 InstallDir    "${INSTALL_DIR}"
 Icon          "app\app-icon.ico"
 RequestExecutionLevel admin
@@ -41,7 +43,7 @@ Page custom EqualizerAPOPage
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN          "$INSTDIR\${APP_EXE}"
-!define MUI_FINISHPAGE_RUN_TEXT     "Launch G Equalizer"
+!define MUI_FINISHPAGE_RUN_TEXT     "Launch G-EQ"
 !define MUI_FINISHPAGE_SHOWREADME ""
 !define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Reboot now (required after EqualizerAPO install)"
@@ -76,7 +78,7 @@ Function EqualizerAPOPage
     SendMessage $0 ${WM_SETFONT} $1 0
 
     ${NSD_CreateLabel} 0 28u 100% 80u \
-        "G Equalizer requires EqualizerAPO to control your system audio.$\r$\n$\r$\nThe installer will now download and install EqualizerAPO automatically.$\r$\n$\r$\nDuring the EqualizerAPO setup, select the audio output device you use for gaming.$\r$\n$\r$\nA reboot will be required after EqualizerAPO installs."
+        "G-EQ requires EqualizerAPO to control your system audio.$\r$\n$\r$\nThe installer will now download and install EqualizerAPO automatically.$\r$\n$\r$\nDuring the EqualizerAPO setup, select the audio output device you use for gaming.$\r$\n$\r$\nA reboot will be required after EqualizerAPO installs."
     Pop $0
 
     nsDialogs::Show
@@ -108,7 +110,7 @@ Section "EqualizerAPO" SEC_EQAPO
 
     ${If} $0 != "0"
         MessageBox MB_ICONEXCLAMATION|MB_OK \
-            "EqualizerAPO setup was cancelled or failed.$\r$\nG Equalizer will still be installed, but EQ controls will be disabled until EqualizerAPO is present."
+            "EqualizerAPO setup was cancelled or failed.$\r$\nG-EQ will still be installed, but EQ controls will be disabled until EqualizerAPO is present."
     ${Else}
         SetRebootFlag true
     ${EndIf}
@@ -117,7 +119,7 @@ Section "EqualizerAPO" SEC_EQAPO
 
 SectionEnd
 
-Section "G Equalizer" SEC_APP
+Section "G-EQ" SEC_APP
 
     SetOutPath "$INSTDIR"
     File /r /x "*.pdb" "app\"

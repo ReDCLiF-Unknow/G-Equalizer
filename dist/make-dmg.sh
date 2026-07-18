@@ -23,7 +23,7 @@ make_dmg() {
 
     # Create the .dmg
     hdiutil create \
-        -volname "G Equalizer $VERSION" \
+        -volname "G-EQ $VERSION" \
         -srcfolder "$STAGING" \
         -ov -format UDZO \
         "$DIST/GEqualizer-macOS-$ARCH-$VERSION.dmg"
