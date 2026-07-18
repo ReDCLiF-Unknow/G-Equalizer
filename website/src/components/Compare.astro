@@ -1,0 +1,68 @@
+---
+const clips = [
+  {
+    label: "EQ Off — raw audio",
+    caption: "Flat, unprocessed system audio",
+    src: "/media/eq-off.mp4",
+  },
+  {
+    label: "EQ On — PUBG preset",
+    caption: "Bass cut, 1k–8kHz boosted for footstep clarity",
+    src: "/media/eq-on.mp4",
+  },
+];
+---
+
+<section id="compare" class="border-t border-line py-[72px]">
+  <div class="mx-auto max-w-[1080px] px-7">
+    <div class="mb-10 flex flex-wrap items-end justify-between gap-4">
+      <div class="max-w-[60ch]">
+        <p class="mb-2.5 text-xs font-bold tracking-[0.12em] text-accent uppercase">
+          Hear it for yourself
+        </p>
+        <h2 class="display mb-3.5 text-[clamp(26px,3.4vw,34px)]">Same clip, EQ off vs. on</h2>
+        <p class="text-[15.5px] text-text-dim">
+          Headphones recommended. Both clips are the same recording — only the EQ changes.
+        </p>
+      </div>
+      <button
+        id="playBothBtn"
+        type="button"
+        class="inline-flex shrink-0 items-center gap-2 rounded-[3px] border border-transparent bg-accent px-[22px] py-[13px] text-sm font-bold tracking-wide text-white hover:bg-[color-mix(in_srgb,var(--accent)_85%,white_15%)]"
+      >
+        ▶ Play both
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+      {
+        clips.map((clip) => (
+          <div class="rounded-md border border-line bg-surface p-4">
+            <div class="mb-3 flex items-baseline justify-between">
+              <span class="mono text-[11px] font-bold tracking-[0.1em] text-text-dim uppercase">
+                {clip.label}
+              </span>
+            </div>
+            <video class="compare-video w-full rounded-sm bg-bg" controls preload="metadata" data-src={clip.src}>
+              <source src={clip.src} />
+              Your browser doesn't support embedded video.
+            </video>
+            <p class="mono mt-2.5 text-[12.5px] text-text-dim">{clip.caption}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<script>
+  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(".compare-video"));
+  const playBothBtn = document.getElementById("playBothBtn");
+
+  playBothBtn?.addEventListener("click", () => {
+    videos.forEach((v) => {
+      v.currentTime = 0;
+    });
+    videos.forEach((v) => v.play());
+  });
+</script>

@@ -1,7 +1,7 @@
-# G Equalizer — Handoff Document
+# G-EQ — Handoff Document
 
-**Date:** 2026-07-14 (v3.0.0 — Avalonia migration complete, stack-overflow crash regression diagnosed and fixed — see "Avalonia Migration" section at the bottom for full detail. This session: added a PUBG preset (not yet in any rebuilt dist artifact); built a marketing landing page concept at `website/index.html` — see "Website" section near the bottom for design direction and what's still open.)
-**Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (private)
+**Date:** 2026-07-18 (rebranded "G Equalizer" → **"G-EQ"** across app/installer/website; repo made **public**; GitHub Release `v3.0.0` published with the rebuilt Windows installer; website rewritten from static HTML to **Astro + Tailwind** and wired to real download/GitHub links; added a side-by-side EQ-off/EQ-on video comparison section — clips not recorded yet, see "Website" section below for the exact TODO. Everything from the 2026-07-14 session below this point is unchanged/still accurate except where noted.)
+**Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (**public** as of 2026-07-18)
 **Branch:** main
 
 ---
@@ -271,13 +271,17 @@ None. All previously known issues are resolved.
 
 ---
 
-## Website (concept built, not deployed)
+## Website (Astro + Tailwind, built and wired to real downloads — not deployed)
 
-- **Location:** `website/index.html` — plain static HTML/CSS, no build tooling, no external dependencies (fonts, JS libs). Single file.
-- **Design direction:** hardware-faceplate / spec-sheet aesthetic rather than a generic SaaS gradient hero — near-black violet ground (`#0a0912`), violet→pink accent (`#8858f2`→`#ef4d95`), mono type for every number (Hz/dB/MB) like a piece of audio gear. Both light and dark themes implemented via CSS custom properties (`prefers-color-scheme` + `data-theme` override).
-- **Sections (built, in order):** sticky nav → hero with a live SVG frequency-response curve using the actual PUBG preset band data (real product data, not decorative) → feature list as a spec-table (name / description / mono figure) → demo section with a hand-built CSS recreation of the real app chrome (preset chips, visualizer bars, sliders — no screenshot exists yet, so this stays visually true to the actual product instead of stock imagery) → download section with 3 platform cards named after the real `dist/` artifacts → footer.
-- **Still placeholder:** all download links and the GitHub link are `href="#"` — need real URLs once the site has somewhere to actually serve the installer/zip/tarball from (GitHub Releases is the natural fit given the artifacts already exist in `dist/`).
-- **Not decided yet:** hosting (GitHub Pages / Netlify / Vercel), domain name, whether to add a changelog/blog page later (would push toward Astro instead of plain HTML if so).
+**2026-07-18 session:** the app and installer were rebranded from "G Equalizer" to **"G-EQ"** across UI, tray, onboarding, and the installer (internal `AssemblyName`/namespace/`%AppData%` path/registry key were deliberately left as `GamingEqualizer` to avoid breaking existing users' saved presets — see the rebrand commit). The repo (`ReDCLiF-Unknow/G-Equalizer`) was made **public**, and a GitHub Release [`v3.0.0`](https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/tag/v3.0.0) was published with the rebuilt, fully-rebranded Windows installer (`G-EQ-Setup-3.0.0.exe`) plus the existing macOS arm64/x64 zips and Linux tarball — those three are flagged in the release notes as **pre-rebrand and unverified on real hardware** (same caveat as before, just carried forward).
+
+- **Location:** `website/` — a real Astro project now (was a single static `index.html`; converted this session). `src/layouts/Layout.astro` + `src/components/{Nav,Hero,Specs,Demo,Compare,Download,Footer}.astro`, composed in `src/pages/index.astro`. Styling is Tailwind v4 (`@tailwindcss/vite`), with the original CSS custom properties (`--bg`, `--accent`, etc., dark by default, `[data-theme="light"]` override) mapped into Tailwind's theme via `@theme inline` in `src/styles/global.css` — so utilities like `bg-accent`/`text-text-dim`/`border-line` work directly. `npm run dev` (port 4321) / `npm run build` (→ `website/dist/`, gitignored).
+- **Design direction unchanged:** hardware-faceplate / spec-sheet aesthetic — near-black violet ground, violet→pink accent, mono type for every number, matches the app itself.
+- **Sections (in order):** sticky nav → hero with live SVG frequency-response curve (real PUBG preset data) → spec table → hand-built CSS recreation of the app chrome (no real screenshot yet) → **new: side-by-side EQ-off/EQ-on video comparison** → download cards → footer.
+- **Download links are now real:** Windows card links straight to the `G-EQ-Setup-3.0.0.exe` release asset; Linux links straight to the tarball; macOS links to the release page itself (since there are two arch variants, arm64/x64, and picking one for the user would be a guess). Footer "GitHub →" links to the now-public repo.
+- **⚠️ TODO — comparison videos not yet recorded:** `src/components/Compare.astro` renders two `<video>` players (labels "EQ Off — raw audio" / "EQ On — PUBG preset") plus a synced "▶ Play both" button, but the actual clips don't exist yet. Drop them in at `website/public/media/eq-off.mp4` and `website/public/media/eq-on.mp4` (exact filenames, see `website/public/media/README.md`) — same source recording, same length, only the EQ differs. `.mp4`/H.264 recommended for browser compatibility. **Remind the user about this if it comes up idle for a while — they said they'd provide the clips later.**
+- **Not decided yet:** hosting (GitHub Pages / Netlify / Vercel), domain name, whether to add a changelog/blog page later.
+- **Housekeeping left over from the rebrand session:** `dist/GEqualizer-Setup-3.0.0.exe` (the old, pre-rebrand installer, superseded by `dist/G-EQ-Setup-3.0.0.exe`) is still sitting on disk, untracked in git — user said to leave it for now. NSIS and the GitHub CLI (`gh`) were installed on this dev machine via `winget` this session (both were missing); the NSIS `inetc` plugin is now vendored at `dist/nsis-plugins/x86-unicode/INetC.dll` and wired in via `!addplugindir` in `installer.nsi`, so the installer can be rebuilt without writing to `Program Files`.
 
 ---
 
