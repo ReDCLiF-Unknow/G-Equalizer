@@ -1,20 +1,45 @@
 ---
-const bars = [
-  22, 38, 55, 70, 88, 100, 92, 76, 60, 45, 30, 20, 35, 52, 68, 84, 96, 80, 64, 48,
-];
-const chips = ["Flat", "FPS", "PUBG", "RPG", "Cinematic", "Music"];
-const bands = [
-  { gain: "-3", height: 18, freq: "32" },
-  { gain: "-4", height: 24, freq: "64" },
-  { gain: "-2", height: 12, freq: "125" },
-  { gain: "-1", height: 6, freq: "250" },
-  { gain: "+1", height: 6, freq: "500" },
-  { gain: "+4", height: 24, freq: "1k" },
-  { gain: "+6", height: 36, freq: "2k" },
-  { gain: "+7", height: 42, freq: "4k" },
-  { gain: "+5", height: 30, freq: "8k" },
-  { gain: "+2", height: 12, freq: "16k" },
-];
+// Real band data from GamingEqualizer/Presets/*.json — 10 bands,
+// 32Hz/64/125/250/500/1k/2k/4k/8k/16k, ±12 dB range.
+const presets: Record<string, number[]> = {
+  Flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  FPS: [0, -2, 0, 1, 2, 3, 4, 5, 3, 1],
+  PUBG: [-3, -4, -2, -1, 1, 4, 6, 7, 5, 2],
+  RPG: [3, 2, 1, 0, -1, 0, 1, 2, 2, 1],
+  Cinematic: [5, 4, 2, 0, -1, -1, 0, 2, 3, 3],
+  Music: [3, 2, 1, 0, -1, 0, 1, 2, 3, 2],
+};
+const chips = Object.keys(presets);
+const freqs = ["32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"];
+const defaultPreset = "PUBG";
+
+// height(px) = |gain(dB)| * 6 — matches the app's own ±12dB-over-46px track scale.
+const heightForGain = (gain: number) => Math.abs(gain) * 6;
+const labelForGain = (gain: number) => (gain > 0 ? `+${gain}` : `${gain}`);
+
+// Small fixed per-bar offsets so the 20-bar spectrum reads as an organic
+// waveform rather than a stair-step of exact duplicate pairs, same idea as
+// the app's own AudioSpectrumAnalyzer interpolating 10 bands -> 80 bars.
+const JITTER = [3, -2, 3, -3, 2, -3, 3, -2, 3, -3, 2, -3, 3, -2, 3, -3, 2, -3, 3, -2];
+
+// Baseline 42% + 10%-per-dB puts a Flat preset (0 dB everywhere) low and
+// steady, while PUBG's +7dB peak maxes out near 100% — makes the shape
+// change between presets obvious instead of a subtle wobble.
+function barsForPreset(bands: number[]) {
+  const out: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    const pos = (i / 19) * 9;
+    const lo = Math.floor(pos);
+    const hi = Math.min(lo + 1, 9);
+    const t = pos - lo;
+    const gain = bands[lo] * (1 - t) + bands[hi] * t;
+    const pct = Math.min(100, Math.max(8, 42 + gain * 10 + JITTER[i]));
+    out.push(Math.round(pct));
+  }
+  return out;
+}
+
+const bars = barsForPreset(presets[defaultPreset]);
 ---
 
 <section id="demo" class="border-t border-line py-[72px]">
@@ -25,44 +50,47 @@ const bands = [
       </p>
       <h2 class="display mb-3.5 text-[clamp(26px,3.4vw,34px)]">No dashboards. Just the console.</h2>
       <p class="text-[15.5px] text-text-dim">
-        The mini widget below is a live recreation of the app's own controls — sliders, presets,
-        and visualizer, resizable and always on top.
+        The mini widget below is a live recreation of the app's own controls. Click a preset to
+        see its actual EQ curve — this is the real band data from the app.
       </p>
     </div>
 
     <div class="mt-2 rounded-[10px] border border-line bg-surface-2 p-4">
       <div class="mb-3.5 flex items-center gap-2.5">
         <span class="h-2 w-2 rounded-full bg-accent"></span>
-        <span class="mono text-[11px] font-bold tracking-[0.06em] text-text-dim uppercase"
-          >G-EQ — PUBG</span
+        <span
+          id="demoTitle"
+          class="mono text-[11px] font-bold tracking-[0.06em] text-text-dim uppercase"
+          >{`G-EQ — ${defaultPreset}`}</span
         >
       </div>
       <div class="mb-[18px] flex flex-wrap gap-2">
         {
           chips.map((chip) => (
-            <span
+            <button
+              type="button"
+              data-preset={chip}
               class:list={[
-                "rounded-full border px-3 py-1.5 text-[11px] font-bold",
-                chip === "PUBG"
-                  ? "border-accent text-text"
-                  : "border-line text-text-dim",
+                "demo-chip cursor-pointer rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors",
+                chip === defaultPreset ? "border-accent text-text" : "border-line text-text-dim",
               ]}
               style={
-                chip === "PUBG"
+                chip === defaultPreset
                   ? "background: color-mix(in srgb, var(--accent) 22%, var(--surface));"
                   : undefined
               }
             >
               {chip}
-            </span>
+            </button>
           ))
         }
       </div>
       <div class="mb-[18px] flex h-16 items-end gap-[3px]" aria-hidden="true">
         {
-          bars.map((h) => (
+          bars.map((h, i) => (
             <i
-              class="viz-bar block flex-1 rounded-t-sm"
+              class="viz-bar demo-bar block flex-1 rounded-t-sm transition-[height] duration-200"
+              data-bar={i}
               style={`height:${h}%; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
             />
           ))
@@ -70,16 +98,19 @@ const bands = [
       </div>
       <div class="flex justify-between gap-1.5">
         {
-          bands.map((band) => (
+          presets[defaultPreset].map((gain, i) => (
             <div class="flex flex-1 flex-col items-center gap-1.5">
-              <span class="mono text-[9px] text-text-dim">{band.gain}</span>
+              <span class="demo-gain mono text-[9px] text-text-dim" data-band={i}>
+                {labelForGain(gain)}
+              </span>
               <div class="relative h-[46px] w-[3px] overflow-hidden rounded-sm bg-line">
                 <div
-                  class="absolute bottom-1/2 left-0 w-full rounded-sm"
-                  style={`height:${band.height}px; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
+                  class="demo-fill absolute bottom-1/2 left-0 w-full rounded-sm transition-[height] duration-200"
+                  data-band={i}
+                  style={`height:${heightForGain(gain)}px; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
                 />
               </div>
-              <span class="mono text-[8px] text-text-dim">{band.freq}</span>
+              <span class="mono text-[8px] text-text-dim">{freqs[i]}</span>
             </div>
           ))
         }
@@ -87,3 +118,64 @@ const bands = [
     </div>
   </div>
 </section>
+
+<script define:vars={{ presets, defaultPreset, JITTER }}>
+  const heightForGain = (gain) => Math.abs(gain) * 6;
+  const labelForGain = (gain) => (gain > 0 ? `+${gain}` : `${gain}`);
+
+  function barsForPreset(bands) {
+    const out = [];
+    for (let i = 0; i < 20; i++) {
+      const pos = (i / 19) * 9;
+      const lo = Math.floor(pos);
+      const hi = Math.min(lo + 1, 9);
+      const t = pos - lo;
+      const gain = bands[lo] * (1 - t) + bands[hi] * t;
+      out.push(Math.round(Math.min(100, Math.max(8, 42 + gain * 10 + JITTER[i]))));
+    }
+    return out;
+  }
+
+  const chipEls = Array.from(document.querySelectorAll(".demo-chip"));
+  const title = document.getElementById("demoTitle");
+  let active = defaultPreset;
+
+  function render(name) {
+    active = name;
+    const bands = presets[name];
+
+    if (title) title.textContent = `G-EQ — ${name}`;
+
+    chipEls.forEach((el) => {
+      const isActive = el.dataset.preset === name;
+      el.classList.toggle("border-accent", isActive);
+      el.classList.toggle("text-text", isActive);
+      el.classList.toggle("border-line", !isActive);
+      el.classList.toggle("text-text-dim", !isActive);
+      el.style.background = isActive
+        ? "color-mix(in srgb, var(--accent) 22%, var(--surface))"
+        : "";
+    });
+
+    document.querySelectorAll(".demo-fill").forEach((el) => {
+      const i = Number(el.dataset.band);
+      el.style.height = `${heightForGain(bands[i])}px`;
+    });
+    document.querySelectorAll(".demo-gain").forEach((el) => {
+      const i = Number(el.dataset.band);
+      el.textContent = labelForGain(bands[i]);
+    });
+
+    const newBars = barsForPreset(bands);
+    document.querySelectorAll(".demo-bar").forEach((el) => {
+      const i = Number(el.dataset.bar);
+      el.style.height = `${newBars[i]}%`;
+    });
+  }
+
+  chipEls.forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.dataset.preset !== active) render(el.dataset.preset);
+    });
+  });
+</script>
