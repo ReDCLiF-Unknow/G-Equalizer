@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0912;
+  --surface: #141220;
+  --surface-2: #1c1830;
+  --line: #2c2640;
+  --accent: #8858f2;
+  --accent-2: #ef4d95;
+  --text: #f4f0ff;
+  --text-dim: #9d94b8;
+  --signal: #35e29a;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f3fb;
+  --surface: #ffffff;
+  --surface-2: #eee7fb;
+  --line: #ddd0f2;
+  --accent: #7a35e0;
+  --accent-2: #cf2f88;
+  --text: #1c1630;
+  --text-dim: #675e85;
+  --signal: #0f9a63;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-signal: var(--signal);
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  --font-display: "Segoe UI", -apple-system, system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family:
+      -apple-system, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: inherit;
+  }
+}
+
+@layer components {
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .display {
+    font-family: var(--font-display);
+    font-weight: 900;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .viz-bar {
+    animation: viz-pulse 2.4s ease-in-out infinite;
+  }
+  .viz-bar:nth-child(odd) {
+    animation-delay: -1.1s;
+  }
+}
+@keyframes viz-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

@@ -1,0 +1,90 @@
+---
+---
+
+<header class="relative overflow-hidden py-[84px] pb-14">
+  <div class="mx-auto max-w-[1080px] px-7">
+    <p class="mb-[18px] text-xs font-bold tracking-[0.12em] text-accent uppercase">
+      System-wide EQ for PC gamers
+    </p>
+    <h1 class="display mb-[22px] max-w-[15ch] text-[clamp(38px,6vw,64px)] leading-[1.03]">
+      Hear the footstep<br />
+      <em
+        class="not-italic bg-clip-text text-transparent"
+        style="background: linear-gradient(100deg, var(--accent), var(--accent-2)); -webkit-background-clip: text;"
+        >before it hears you</em
+      >
+    </h1>
+    <p class="mb-8 max-w-[52ch] text-lg text-text-dim">
+      G-EQ sits between EqualizerAPO and your ears — a 10-band system-wide equalizer built for
+      competitive audio, with per-ear calibration, gaming presets, and a mini widget that never
+      leaves your screen.
+    </p>
+    <div class="mb-14 flex flex-wrap gap-3">
+      <a
+        class="inline-flex items-center gap-2 rounded-[3px] border border-transparent bg-accent px-[22px] py-[13px] text-sm font-bold tracking-wide text-white no-underline hover:bg-[color-mix(in_srgb,var(--accent)_85%,white_15%)]"
+        href="#download"
+      >
+        Download for Windows
+      </a>
+      <a
+        class="inline-flex items-center gap-2 rounded-[3px] border border-line px-[22px] py-[13px] text-sm font-bold tracking-wide text-text no-underline hover:border-accent"
+        href="#demo"
+      >
+        See it running →
+      </a>
+    </div>
+
+    <div class="rounded-md border border-line bg-surface px-[22px] pt-[22px] pb-3.5">
+      <div class="mb-3 flex items-baseline justify-between">
+        <span class="mono text-[11px] font-bold tracking-[0.1em] text-text-dim uppercase">
+          Frequency Response — PUBG Preset
+        </span>
+        <span class="mono text-xs text-signal before:content-['●_']">EQ ACTIVE</span>
+      </div>
+      <svg
+        viewBox="0 0 720 140"
+        width="100%"
+        height="140"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Frequency response curve for the PUBG preset, cutting low bass and boosting 1kHz to 8kHz for footstep clarity"
+      >
+        <defs>
+          <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent-2)" stop-opacity="0.35"></stop>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"></stop>
+          </linearGradient>
+          <linearGradient id="curveLine" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--accent-2)"></stop>
+            <stop offset="100%" stop-color="var(--accent)"></stop>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="70" x2="720" y2="70" stroke="var(--line)" stroke-width="1"></line>
+        <path
+          d="M0,95 L80,105 L160,90 L240,80 L320,55 L400,20 L480,8 L560,15 L640,35 L720,55 L720,140 L0,140 Z"
+          fill="url(#curveFill)"
+        ></path>
+        <path
+          d="M0,95 L80,105 L160,90 L240,80 L320,55 L400,20 L480,8 L560,15 L640,35 L720,55"
+          fill="none"
+          stroke="url(#curveLine)"
+          stroke-width="2.5"
+          stroke-linejoin="round"
+          stroke-linecap="round"
+        ></path>
+      </svg>
+      <div class="mono mt-1.5 flex justify-between">
+        <span class="text-[10px] text-text-dim">32</span>
+        <span class="text-[10px] text-text-dim">64</span>
+        <span class="text-[10px] text-text-dim">125</span>
+        <span class="text-[10px] text-text-dim">250</span>
+        <span class="text-[10px] text-text-dim">500</span>
+        <span class="text-[10px] text-text-dim">1k</span>
+        <span class="text-[10px] text-text-dim">2k</span>
+        <span class="text-[10px] text-text-dim">4k</span>
+        <span class="text-[10px] text-text-dim">8k</span>
+        <span class="text-[10px] text-text-dim">16k Hz</span>
+      </div>
+    </div>
+  </div>
+</header>

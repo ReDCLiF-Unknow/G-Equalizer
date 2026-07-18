@@ -1,0 +1,64 @@
+---
+const RELEASE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/download/v3.0.0";
+const RELEASE_PAGE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/tag/v3.0.0";
+
+const platforms = [
+  {
+    os: "Windows",
+    fmt: "G-EQ-Setup-3.0.0.exe · ~31 MB",
+    cta: "Download installer",
+    href: `${RELEASE}/G-EQ-Setup-3.0.0.exe`,
+    stale: false,
+  },
+  {
+    os: "macOS",
+    fmt: "Apple Silicon & Intel · .zip",
+    cta: "Choose your build on GitHub",
+    href: RELEASE_PAGE,
+    stale: true,
+  },
+  {
+    os: "Linux",
+    fmt: "x64 · .tar.gz",
+    cta: "Download tarball",
+    href: `${RELEASE}/GEqualizer-linux-x64-3.0.0.tar.gz`,
+    stale: true,
+  },
+];
+---
+
+<section id="download" class="border-t border-line py-[72px]">
+  <div class="mx-auto max-w-[1080px] px-7">
+    <div class="mb-10 max-w-[60ch]">
+      <p class="mb-2.5 text-xs font-bold tracking-[0.12em] text-accent uppercase">
+        Get it running
+      </p>
+      <h2 class="display mb-3.5 text-[clamp(26px,3.4vw,34px)]">Pick your platform</h2>
+      <p class="text-[15.5px] text-text-dim">
+        Windows installs EqualizerAPO for you automatically. macOS and Linux ship as portable
+        bundles.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        platforms.map((p) => (
+          <a
+            class="group flex flex-col gap-2.5 rounded-md border border-line bg-surface p-[22px] text-text no-underline hover:border-accent"
+            href={p.href}
+          >
+            <span class="text-base font-extrabold">{p.os}</span>
+            <span class="mono text-[12.5px] text-text-dim">{p.fmt}</span>
+            <span class="text-xs font-bold tracking-wide text-accent after:content-['_→']">
+              {p.cta}
+            </span>
+            {p.stale && (
+              <span class="mono text-[10.5px] text-text-dim/80">
+                Branding update pending — internal build predates the G-EQ rename
+              </span>
+            )}
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</section>

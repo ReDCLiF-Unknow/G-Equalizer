@@ -1,0 +1,89 @@
+---
+const bars = [
+  22, 38, 55, 70, 88, 100, 92, 76, 60, 45, 30, 20, 35, 52, 68, 84, 96, 80, 64, 48,
+];
+const chips = ["Flat", "FPS", "PUBG", "RPG", "Cinematic", "Music"];
+const bands = [
+  { gain: "-3", height: 18, freq: "32" },
+  { gain: "-4", height: 24, freq: "64" },
+  { gain: "-2", height: 12, freq: "125" },
+  { gain: "-1", height: 6, freq: "250" },
+  { gain: "+1", height: 6, freq: "500" },
+  { gain: "+4", height: 24, freq: "1k" },
+  { gain: "+6", height: 36, freq: "2k" },
+  { gain: "+7", height: 42, freq: "4k" },
+  { gain: "+5", height: 30, freq: "8k" },
+  { gain: "+2", height: 12, freq: "16k" },
+];
+---
+
+<section id="demo" class="border-t border-line py-[72px]">
+  <div class="mx-auto max-w-[1080px] px-7">
+    <div class="mb-10 max-w-[60ch]">
+      <p class="mb-2.5 text-xs font-bold tracking-[0.12em] text-accent uppercase">
+        The actual interface
+      </p>
+      <h2 class="display mb-3.5 text-[clamp(26px,3.4vw,34px)]">No dashboards. Just the console.</h2>
+      <p class="text-[15.5px] text-text-dim">
+        The mini widget below is a live recreation of the app's own controls — sliders, presets,
+        and visualizer, resizable and always on top.
+      </p>
+    </div>
+
+    <div class="mt-2 rounded-[10px] border border-line bg-surface-2 p-4">
+      <div class="mb-3.5 flex items-center gap-2.5">
+        <span class="h-2 w-2 rounded-full bg-accent"></span>
+        <span class="mono text-[11px] font-bold tracking-[0.06em] text-text-dim uppercase"
+          >G-EQ — PUBG</span
+        >
+      </div>
+      <div class="mb-[18px] flex flex-wrap gap-2">
+        {
+          chips.map((chip) => (
+            <span
+              class:list={[
+                "rounded-full border px-3 py-1.5 text-[11px] font-bold",
+                chip === "PUBG"
+                  ? "border-accent text-text"
+                  : "border-line text-text-dim",
+              ]}
+              style={
+                chip === "PUBG"
+                  ? "background: color-mix(in srgb, var(--accent) 22%, var(--surface));"
+                  : undefined
+              }
+            >
+              {chip}
+            </span>
+          ))
+        }
+      </div>
+      <div class="mb-[18px] flex h-16 items-end gap-[3px]" aria-hidden="true">
+        {
+          bars.map((h) => (
+            <i
+              class="viz-bar block flex-1 rounded-t-sm"
+              style={`height:${h}%; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
+            />
+          ))
+        }
+      </div>
+      <div class="flex justify-between gap-1.5">
+        {
+          bands.map((band) => (
+            <div class="flex flex-1 flex-col items-center gap-1.5">
+              <span class="mono text-[9px] text-text-dim">{band.gain}</span>
+              <div class="relative h-[46px] w-[3px] rounded-sm bg-line">
+                <div
+                  class="absolute bottom-1/2 left-0 w-full rounded-sm"
+                  style={`height:${band.height}px; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
+                />
+              </div>
+              <span class="mono text-[8px] text-text-dim">{band.freq}</span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>

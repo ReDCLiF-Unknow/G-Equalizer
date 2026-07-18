@@ -1,0 +1,69 @@
+---
+const specs = [
+  {
+    name: "10-band EQ",
+    desc: "Peaking filters, Q 1.41, 32Hz–16kHz. Double-click any band to zero it instantly.",
+    figure: "±12 dB",
+  },
+  {
+    name: "Per-ear calibration",
+    desc: "A 14-step hearing test tunes left and right independently, then rides along under every preset you switch to.",
+    figure: "L / R",
+  },
+  {
+    name: "Gaming presets",
+    desc: "FPS, PUBG, RPG, Cinematic, Music, Flat — or save, export, and share your own as a code.",
+    figure: "6+ built-in",
+  },
+  {
+    name: "Auto-preset switching",
+    desc: "Detects the foreground process and swaps presets on its own — launch CS2, get your FPS curve.",
+    figure: "2s poll",
+  },
+  {
+    name: "AutoEQ import",
+    desc: "Drop in a parametric AutoEQ correction file for your headphones and it blends straight into a preset.",
+    figure: ".txt",
+  },
+  {
+    name: "Live spectrum visualizer",
+    desc: "80-bar WASAPI loopback capture with FFT, or a reactive EQ-mode animation when you'd rather not tap audio.",
+    figure: "80 bars",
+  },
+  {
+    name: "Global hotkeys",
+    desc: "Toggle the EQ or cycle presets without alt-tabbing out of your game.",
+    figure: "Ctrl+Alt",
+  },
+];
+---
+
+<section id="specs" class="border-t border-line py-[72px]">
+  <div class="mx-auto max-w-[1080px] px-7">
+    <div class="mb-10 max-w-[60ch]">
+      <p class="mb-2.5 text-xs font-bold tracking-[0.12em] text-accent uppercase">
+        What's in the signal chain
+      </p>
+      <h2 class="display mb-3.5 text-[clamp(26px,3.4vw,34px)]">
+        Built like hardware, priced like software
+      </h2>
+      <p class="text-[15.5px] text-text-dim">
+        Every control writes straight to EqualizerAPO's config in real time — no restart, no
+        dropout.
+      </p>
+    </div>
+    <div class="border-t border-line">
+      {
+        specs.map((spec) => (
+          <div class="grid grid-cols-1 gap-1 border-b border-line py-5 sm:grid-cols-[180px_1fr_100px] sm:items-baseline sm:gap-5">
+            <div class="text-[15px] font-extrabold">{spec.name}</div>
+            <div class="text-[14.5px] text-text-dim">{spec.desc}</div>
+            <div class="mono text-left text-[13px] whitespace-nowrap text-accent sm:text-right">
+              {spec.figure}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
