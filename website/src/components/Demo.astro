@@ -73,7 +73,7 @@ const bands = [
           bands.map((band) => (
             <div class="flex flex-1 flex-col items-center gap-1.5">
               <span class="mono text-[9px] text-text-dim">{band.gain}</span>
-              <div class="relative h-[46px] w-[3px] rounded-sm bg-line">
+              <div class="relative h-[46px] w-[3px] overflow-hidden rounded-sm bg-line">
                 <div
                   class="absolute bottom-1/2 left-0 w-full rounded-sm"
                   style={`height:${band.height}px; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
