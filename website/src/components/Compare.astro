@@ -1,16 +1,27 @@
 ---
+import fs from "node:fs";
+import path from "node:path";
+
+const mediaDir = path.resolve("public/media");
+
 const clips = [
   {
     label: "EQ Off — raw audio",
     caption: "Flat, unprocessed system audio",
-    src: `${import.meta.env.BASE_URL}media/eq-off.mp4`,
+    file: "eq-off.mp4",
   },
   {
     label: "EQ On — PUBG preset",
     caption: "Bass cut, 1k–8kHz boosted for footstep clarity",
-    src: `${import.meta.env.BASE_URL}media/eq-on.mp4`,
+    file: "eq-on.mp4",
   },
-];
+].map((clip) => ({
+  ...clip,
+  src: `${import.meta.env.BASE_URL}media/${clip.file}`,
+  exists: fs.existsSync(path.join(mediaDir, clip.file)),
+}));
+
+const allReady = clips.every((c) => c.exists);
 ---
 
 <section id="compare" class="border-t border-line py-[72px]">
@@ -25,31 +36,49 @@ const clips = [
           Headphones recommended. Both clips are the same recording — only the EQ changes.
         </p>
       </div>
-      <button
-        id="playBothBtn"
-        type="button"
-        class="inline-flex shrink-0 items-center gap-2 rounded-[3px] border border-transparent bg-accent px-[22px] py-[13px] text-sm font-bold tracking-wide text-white hover:bg-[color-mix(in_srgb,var(--accent)_85%,white_15%)]"
-      >
-        ▶ Play both
-      </button>
+      {allReady && (
+        <button
+          id="playBothBtn"
+          type="button"
+          class="inline-flex shrink-0 items-center gap-2 rounded-[3px] border border-transparent bg-accent px-[22px] py-[13px] text-sm font-bold tracking-wide text-white hover:bg-[color-mix(in_srgb,var(--accent)_85%,white_15%)]"
+        >
+          ▶ Play both
+        </button>
+      )}
     </div>
 
     <div class="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
       {
-        clips.map((clip) => (
-          <div class="rounded-md border border-line bg-surface p-4">
-            <div class="mb-3 flex items-baseline justify-between">
-              <span class="mono text-[11px] font-bold tracking-[0.1em] text-text-dim uppercase">
-                {clip.label}
-              </span>
+        clips.map((clip) =>
+          clip.exists ? (
+            <div class="rounded-md border border-line bg-surface p-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <span class="mono text-[11px] font-bold tracking-[0.1em] text-text-dim uppercase">
+                  {clip.label}
+                </span>
+              </div>
+              <video class="compare-video w-full rounded-sm bg-bg" controls preload="metadata" data-src={clip.src}>
+                <source src={clip.src} />
+                Your browser doesn't support embedded video.
+              </video>
+              <p class="mono mt-2.5 text-[12.5px] text-text-dim">{clip.caption}</p>
             </div>
-            <video class="compare-video w-full rounded-sm bg-bg" controls preload="metadata" data-src={clip.src}>
-              <source src={clip.src} />
-              Your browser doesn't support embedded video.
-            </video>
-            <p class="mono mt-2.5 text-[12.5px] text-text-dim">{clip.caption}</p>
-          </div>
-        ))
+          ) : (
+            <div class="rounded-md border border-dashed border-line bg-surface p-4">
+              <div class="mb-3 flex items-baseline justify-between">
+                <span class="mono text-[11px] font-bold tracking-[0.1em] text-text-dim uppercase">
+                  {clip.label}
+                </span>
+              </div>
+              <div class="flex aspect-video w-full items-center justify-center rounded-sm bg-bg">
+                <span class="mono text-xs font-bold tracking-[0.08em] text-text-dim uppercase">
+                  Coming soon
+                </span>
+              </div>
+              <p class="mono mt-2.5 text-[12.5px] text-text-dim">{clip.caption}</p>
+            </div>
+          )
+        )
       }
     </div>
   </div>
