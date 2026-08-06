@@ -196,6 +196,33 @@
                 <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
                 <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
                 <SolidColorBrush x:Key="ErrorBrush"         Color="#db2777"/>
+
+                <!-- Perforated speaker-grille tile: staggered dot lattice over SectionBgBrush -->
+                <DrawingBrush x:Key="GrilleBgBrush"
+                              TileMode="Tile"
+                              Stretch="None"
+                              SourceRect="0,0,16,16"
+                              DestinationRect="0,0,16,16">
+                    <DrawingBrush.Drawing>
+                        <DrawingGroup>
+                            <GeometryDrawing Brush="#08080f">
+                                <GeometryDrawing.Geometry>
+                                    <RectangleGeometry Rect="0,0,16,16"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="#15152b">
+                                <GeometryDrawing.Geometry>
+                                    <EllipseGeometry Rect="2.6,2.6,2.8,2.8"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="#15152b">
+                                <GeometryDrawing.Geometry>
+                                    <EllipseGeometry Rect="10.6,10.6,2.8,2.8"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                        </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                </DrawingBrush>
             </Style.Resources>
         </Style>
 
@@ -215,6 +242,33 @@
                 <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
                 <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
                 <SolidColorBrush x:Key="ErrorBrush"         Color="#db2777"/>
+
+                <!-- Perforated speaker-grille tile: staggered dot lattice over SectionBgBrush -->
+                <DrawingBrush x:Key="GrilleBgBrush"
+                              TileMode="Tile"
+                              Stretch="None"
+                              SourceRect="0,0,16,16"
+                              DestinationRect="0,0,16,16">
+                    <DrawingBrush.Drawing>
+                        <DrawingGroup>
+                            <GeometryDrawing Brush="#08080f">
+                                <GeometryDrawing.Geometry>
+                                    <RectangleGeometry Rect="0,0,16,16"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="#15152b">
+                                <GeometryDrawing.Geometry>
+                                    <EllipseGeometry Rect="2.6,2.6,2.8,2.8"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                            <GeometryDrawing Brush="#15152b">
+                                <GeometryDrawing.Geometry>
+                                    <EllipseGeometry Rect="10.6,10.6,2.8,2.8"/>
+                                </GeometryDrawing.Geometry>
+                            </GeometryDrawing>
+                        </DrawingGroup>
+                    </DrawingBrush.Drawing>
+                </DrawingBrush>
             </Style.Resources>
         </Style>
 

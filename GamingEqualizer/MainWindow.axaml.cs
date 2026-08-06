@@ -130,8 +130,7 @@ public partial class MainWindow : Window
         StartPulse();
         RefreshAutoPresetTimer();
 
-        if (!_backend.IsAvailable)
-            ShowEqApoMissingBanner();
+        CheckEqBackendHealth();
 
         if (OperatingSystem.IsWindows())
         {
@@ -450,8 +449,7 @@ public partial class MainWindow : Window
 
         SetVizTargets();
 
-        if (_settings.EqEnabled)
-            ApplyCurrentGains();
+        ApplyIfEnabled();
 
         if (done)
         {
@@ -524,8 +522,7 @@ public partial class MainWindow : Window
         _settings.Save();
         SetVizTargets();
 
-        if (_settings.EqEnabled)
-            ApplyCurrentGains();
+        ApplyIfEnabled();
     }
 
     private void ResetAllBands_Click(object? sender, RoutedEventArgs e)
@@ -549,7 +546,7 @@ public partial class MainWindow : Window
         _settings.BoostEnabled = !_settings.BoostEnabled;
         _settings.Save();
         RefreshBoostButton();
-        if (_settings.EqEnabled) ApplyCurrentGains();
+        ApplyIfEnabled();
     }
 
     private void RefreshBoostButton()
@@ -579,6 +576,7 @@ public partial class MainWindow : Window
             StatusDot.Fill         = new SolidColorBrush(Color.FromRgb(124, 58, 237));
             StatusPill.BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x7c, 0x3a, 0xed));
             _pulseTimer?.Start();
+            HideErrorBanner();   // clears the "EQ is switched off" hint, if shown
             if (writeConfig) ApplyCurrentGains();
         }
         else
@@ -738,7 +736,7 @@ public partial class MainWindow : Window
         _settings.BoostEnabled = BoostEnabledCheck.IsChecked == true;
         _settings.Save();
         RefreshBoostButton();
-        if (_settings.EqEnabled) ApplyCurrentGains();
+        ApplyIfEnabled();
     }
 
     private void BoostSlider_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
@@ -748,7 +746,7 @@ public partial class MainWindow : Window
         BoostLabel.Text   = $"+{_settings.BoostDb:0} dB";
         _settings.Save();
         RefreshBoostButton();
-        if (_settings.EqEnabled) ApplyCurrentGains();
+        ApplyIfEnabled();
     }
 
     private static readonly string PresetsDir = Path.Combine(
@@ -1042,13 +1040,45 @@ public partial class MainWindow : Window
             lt.Shutdown();
     }
 
+    // Match the palette in App.axaml: ErrorBrush #db2777, AccentBrush #7c3aed.
+    private static readonly SolidColorBrush BannerErrorBrush = new(Color.FromRgb(0xdb, 0x27, 0x77));
+    private static readonly SolidColorBrush BannerHintBrush  = new(Color.FromRgb(0x7c, 0x3a, 0xed));
+
     private void ShowErrorBanner(string message)
     {
-        ErrorText.Text     = message;
-        ErrorBanner.IsVisible = true;
+        ErrorText.Text         = message;
+        ErrorBanner.Background = BannerErrorBrush;
+        ErrorBanner.IsVisible  = true;
     }
 
     private void HideErrorBanner() => ErrorBanner.IsVisible = false;
+
+    /// <summary>
+    /// Same banner, accent-coloured: this is guidance, not a failure.
+    /// </summary>
+    private void ShowHintBanner(string message)
+    {
+        ErrorText.Text         = message;
+        ErrorBanner.Background = BannerHintBrush;
+        ErrorBanner.IsVisible  = true;
+    }
+
+    /// <summary>
+    /// Apply the current gains, or explain why nothing happened when the EQ is off.
+    /// Silently doing nothing here is exactly what makes a disabled EQ feel broken:
+    /// the sliders move, the visualizer reacts, and the audio never changes.
+    /// </summary>
+    private void ApplyIfEnabled()
+    {
+        if (_settings.EqEnabled)
+        {
+            ApplyCurrentGains();
+            return;
+        }
+
+        ShowHintBanner("The EQ is switched off, so this won't change what you hear — "
+                     + "click ENABLE (or press Ctrl+Alt+E) to turn it on.");
+    }
 
     private void ShowEqApoMissingBanner()
     {
@@ -1056,6 +1086,34 @@ public partial class MainWindow : Window
                         "EQ controls are disabled. Install EqualizerAPO and restart the app.");
         foreach (var s in _sliders) s.IsEnabled = false;
         ToggleButton.IsEnabled = false;
+    }
+
+    /// <summary>
+    /// "Installed" is not the same as "audible": EqualizerAPO can be present and accepting
+    /// our config writes while Windows never loads it into the playback device's APO chain.
+    /// Warn about that instead of silently doing nothing. Controls stay enabled — the config
+    /// is still written correctly and starts working as soon as the user fixes the hookup.
+    /// </summary>
+    private void CheckEqBackendHealth()
+    {
+        if (!_backend.IsAvailable)
+        {
+            ShowEqApoMissingBanner();
+            return;
+        }
+
+        if (!OperatingSystem.IsWindows()) return;
+
+        switch (EqApoDiagnostics.GetStatus())
+        {
+            case EqApoStatus.NotAttached:
+                ShowErrorBanner(
+                    "EqualizerAPO is installed but is not active on your current playback device, " +
+                    "so the EQ will not change what you hear. Open " +
+                    "C:\\Program Files\\EqualizerAPO\\Configurator.exe, tick that device, then reboot. " +
+                    "If it still has no effect, also enable \"Install as SFX/EFX\" under Troubleshooting.");
+                break;
+        }
     }
 
     // Close to tray instead of quitting
@@ -1115,6 +1173,97 @@ public partial class MainWindow : Window
 
     private void VisualizerCanvas_SizeChanged(object? sender, SizeChangedEventArgs e)
         => PositionVizBars();
+
+    // ── Headphone backdrop ──────────────────────────────────────────────────
+    //
+    // Randomly scattered, randomly rotated headphone outlines behind the EQ
+    // sliders. Positions are rejection-sampled against a circular bound: the
+    // 50x36 glyph fits inside a circle of radius HpRadius about its centre, so
+    // keeping every pair of centres more than a diameter apart guarantees no
+    // two icons overlap no matter how they are rotated.
+
+    private const  double HpHalfW  = 25;   // glyph is 50 x 36 …
+    private const  double HpHalfH  = 18;
+    private static readonly double HpRadius = Math.Sqrt(HpHalfW * HpHalfW + HpHalfH * HpHalfH);
+
+    private readonly Random       _hpRandom  = new();
+    private readonly List<Point>  _hpCenters = new();
+    private Size _hpLastSize;
+    private bool _buildingHeadphones;
+
+    private void HeadphoneLayer_SizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        // Only regenerate on a meaningful resize, so sub-pixel/transient size
+        // changes can't churn the layout (or feed back into another pass).
+        if (Math.Abs(e.NewSize.Width  - _hpLastSize.Width)  < 8 &&
+            Math.Abs(e.NewSize.Height - _hpLastSize.Height) < 8)
+            return;
+
+        BuildHeadphoneBackdrop();
+    }
+
+    private void BuildHeadphoneBackdrop()
+    {
+        if (_buildingHeadphones) return;
+        _buildingHeadphones = true;
+        try
+        {
+            HeadphoneLayer.Children.Clear();
+            _hpCenters.Clear();
+
+            double w = HeadphoneLayer.Bounds.Width;
+            double h = HeadphoneLayer.Bounds.Height;
+            _hpLastSize = new Size(w, h);
+            if (w < HpRadius * 2 || h < HpRadius * 2) return;
+
+            int    target  = (int)Math.Clamp(w * h / 20000d, 3, 16);
+            double minDist = HpRadius * 2 + 10;
+
+            for (int placed = 0, attempts = 0; placed < target && attempts < 400; attempts++)
+            {
+                double cx = HpRadius + _hpRandom.NextDouble() * (w - HpRadius * 2);
+                double cy = HpRadius + _hpRandom.NextDouble() * (h - HpRadius * 2);
+
+                bool clashes = false;
+                foreach (var c in _hpCenters)
+                {
+                    double dx = c.X - cx, dy = c.Y - cy;
+                    if (dx * dx + dy * dy < minDist * minDist) { clashes = true; break; }
+                }
+                if (clashes) continue;
+
+                _hpCenters.Add(new Point(cx, cy));
+                HeadphoneLayer.Children.Add(
+                    MakeHeadphone(cx, cy, _hpRandom.NextDouble() * 360));
+                placed++;
+            }
+        }
+        finally { _buildingHeadphones = false; }
+    }
+
+    private static Avalonia.Controls.Shapes.Path MakeHeadphone(double cx, double cy, double angle)
+    {
+        var geo = new GeometryGroup();
+        geo.Children.Add(Geometry.Parse("M 5,21 A 20,20 0 0 1 45,21")); // headband
+        geo.Children.Add(new EllipseGeometry(new Rect( 1, 19, 10, 16))); // left cup
+        geo.Children.Add(new EllipseGeometry(new Rect(39, 19, 10, 16))); // right cup
+
+        var path = new Avalonia.Controls.Shapes.Path
+        {
+            Data                  = geo,
+            Stroke                = new SolidColorBrush(Color.Parse("#17172f")),
+            StrokeThickness       = 1.6,
+            Width                 = HpHalfW * 2,
+            Height                = HpHalfH * 2,
+            RenderTransformOrigin = RelativePoint.Center,
+            RenderTransform       = new RotateTransform(angle),
+            IsHitTestVisible      = false
+        };
+
+        Canvas.SetLeft(path, cx - HpHalfW);
+        Canvas.SetTop (path, cy - HpHalfH);
+        return path;
+    }
 
     private void VizTick(object? sender, EventArgs e)
     {

@@ -139,8 +139,17 @@
 
             <!-- ── EQ sliders ────────────────────────────────────────────── -->
             <Border Grid.Row="3"
-                    Background="{DynamicResource SectionBgBrush}"
+                    Background="{DynamicResource GrilleBgBrush}"
                     Padding="16,10,16,6">
+                <Panel>
+                    <!-- Scattered headphone outlines over the grille dots, generated in
+                         BuildHeadphoneBackdrop(). Negative margin cancels the Border
+                         padding so icons can sit edge to edge. -->
+                    <Canvas x:Name="HeadphoneLayer"
+                            Margin="-16,-10,-16,-6"
+                            ClipToBounds="True"
+                            IsHitTestVisible="False"
+                            SizeChanged="HeadphoneLayer_SizeChanged"/>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="18"/>
@@ -162,6 +171,7 @@
                                  Rows="1" Columns="10"
                                  HorizontalAlignment="Stretch"/>
                 </Grid>
+                </Panel>
             </Border>
 
             <!-- ── Preset chips ───────────────────────────────────────────── -->
