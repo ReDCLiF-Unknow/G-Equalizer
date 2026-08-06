@@ -77,8 +77,8 @@ Function EqualizerAPOPage
     CreateFont $1 "Segoe UI" 11 700
     SendMessage $0 ${WM_SETFONT} $1 0
 
-    ${NSD_CreateLabel} 0 28u 100% 80u \
-        "G-EQ requires EqualizerAPO to control your system audio.$\r$\n$\r$\nThe installer will now download and install EqualizerAPO automatically.$\r$\n$\r$\nDuring the EqualizerAPO setup, select the audio output device you use for gaming.$\r$\n$\r$\nA reboot will be required after EqualizerAPO installs."
+    ${NSD_CreateLabel} 0 28u 100% 108u \
+        "G-EQ requires EqualizerAPO to control your system audio.$\r$\n$\r$\nThe installer will now download and install EqualizerAPO automatically.$\r$\n$\r$\nIn the EqualizerAPO setup, tick the audio output device you use for gaming. If the EQ later has no audible effect, re-run its Configurator and also enable $\"Install as SFX/EFX$\" under Troubleshooting — some devices ignore the default install mode.$\r$\n$\r$\nA reboot will be required after EqualizerAPO installs."
     Pop $0
 
     nsDialogs::Show
