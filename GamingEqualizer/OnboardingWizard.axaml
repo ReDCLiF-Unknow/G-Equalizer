@@ -105,6 +105,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Grid.Column="0" Background="#0d0d1a" BorderBrush="#252538"
@@ -115,10 +116,17 @@
                                    Foreground="{DynamicResource TextBrush}" Margin="14,0,0,12" VerticalAlignment="Center"/>
 
                         <Border Grid.Row="1" Grid.Column="0" Background="#0d0d1a" BorderBrush="#252538"
-                                BorderThickness="1" CornerRadius="4" Padding="10,6">
+                                BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,12">
                             <TextBlock Text="Ctrl + Alt + P" Foreground="#c4b5fd" FontFamily="Consolas" FontSize="13"/>
                         </Border>
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="Cycle to next preset"
+                                   Foreground="{DynamicResource TextBrush}" Margin="14,0,0,12" VerticalAlignment="Center"/>
+
+                        <Border Grid.Row="2" Grid.Column="0" Background="#0d0d1a" BorderBrush="#252538"
+                                BorderThickness="1" CornerRadius="4" Padding="10,6">
+                            <TextBlock Text="Ctrl + Alt + 1…9" Foreground="#c4b5fd" FontFamily="Consolas" FontSize="13"/>
+                        </Border>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="Jump straight to a preset"
                                    Foreground="{DynamicResource TextBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
                     </Grid>
 

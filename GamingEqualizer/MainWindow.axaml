@@ -310,6 +310,37 @@
                                        Text="+0 dB"/>
                         </StackPanel>
 
+                        <!-- Hotkeys -->
+                        <TextBlock Text="HOTKEYS"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,0,0,10"/>
+                        <Grid Margin="0,0,0,6" ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Toggle EQ"
+                                       VerticalAlignment="Center" Margin="0,0,0,6"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <Button x:Name="HotkeyToggleButton" Grid.Row="0" Grid.Column="1"
+                                    Tag="toggle" MinWidth="150" HorizontalAlignment="Left"
+                                    Margin="0,0,0,6" Click="CaptureHotkey_Click"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Cycle preset"
+                                       VerticalAlignment="Center" Margin="0,0,0,6"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <Button x:Name="HotkeyCycleButton" Grid.Row="1" Grid.Column="1"
+                                    Tag="cycle" MinWidth="150" HorizontalAlignment="Left"
+                                    Margin="0,0,0,6" Click="CaptureHotkey_Click"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Preset 1…9"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <ComboBox x:Name="HotkeyPresetModsBox" Grid.Row="2" Grid.Column="1"
+                                      MinWidth="150" HorizontalAlignment="Left"
+                                      SelectionChanged="HotkeyPresetMods_Changed"/>
+                        </Grid>
+                        <TextBlock Text="Click a hotkey, then press the new combination (Esc cancels). A modifier is required."
+                                   TextWrapping="Wrap" FontSize="11" Margin="0,0,0,20"
+                                   Foreground="{DynamicResource TextDimBrush}"/>
+
                         <!-- Presets import/export -->
                         <TextBlock Text="PRESETS"
                                    FontSize="10" FontWeight="Bold"

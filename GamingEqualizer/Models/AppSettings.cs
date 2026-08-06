@@ -20,6 +20,12 @@ public class AppSettings
     public bool AutoPresetEnabled { get; set; } = false;
     public double WindowWidth { get; set; } = 820;
     public double WindowHeight { get; set; } = 610;
+
+    // Global hotkeys, stored as text ("Ctrl+Alt+E") — see Hotkey.TryParse.
+    public string HotkeyToggle { get; set; } = "Ctrl+Alt+E";
+    public string HotkeyCycle  { get; set; } = "Ctrl+Alt+P";
+    // Modifiers only; combined with 1..9 to jump straight to the nth preset.
+    public string HotkeyPresetModifiers { get; set; } = "Ctrl+Alt";
     public Dictionary<string, string> ProcessPresetMap { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["cs2.exe"]                        = "FPS",

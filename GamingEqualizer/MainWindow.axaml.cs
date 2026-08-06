@@ -137,7 +137,10 @@ public partial class MainWindow : Window
             var hwnd = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
             if (hwnd != IntPtr.Zero)
             {
-                HotkeyManager.Register(hwnd);
+                // Re-registering on every OnOpened is safe (Unregister first) and keeps the
+                // hotkeys correct after a hide-to-tray/restore cycle.
+                HotkeyManager.Unregister(hwnd);
+                WarnAboutFailedHotkeys(HotkeyManager.Register(hwnd, _settings));
 
                 // OnOpened can fire more than once for the same window (e.g. hide-to-tray
                 // then restore). Only subclass the WndProc once per hwnd — re-subclassing
@@ -655,6 +658,7 @@ public partial class MainWindow : Window
         BoostSlider.Value           = _settings.BoostDb;
         BoostLabel.Text             = $"+{_settings.BoostDb:0} dB";
         AutoPresetCheck.IsChecked   = _settings.AutoPresetEnabled;
+        RefreshHotkeyControls();
 
         _mappingRows.Clear();
         foreach (var kv in _settings.ProcessPresetMap)
@@ -1502,6 +1506,12 @@ public partial class MainWindow : Window
                 Dispatcher.UIThread.InvokeAsync(() => { SetEqState(!_settings.EqEnabled, true); _settings.Save(); SyncMiniWindow(); });
             else if (id == HotkeyManager.HK_CYCLE)
                 Dispatcher.UIThread.InvokeAsync(() => { CyclePreset(); SyncMiniWindow(); });
+            else if (id >= HotkeyManager.HK_PRESET_BASE &&
+                     id <  HotkeyManager.HK_PRESET_BASE + HotkeyManager.PresetCount)
+            {
+                int index = id - HotkeyManager.HK_PRESET_BASE;
+                Dispatcher.UIThread.InvokeAsync(() => { SelectPresetByIndex(index); SyncMiniWindow(); });
+            }
             return IntPtr.Zero;
         }
         return CallWindowProc(_originalWndProc, hwnd, msg, wParam, lParam);
@@ -1515,6 +1525,125 @@ public partial class MainWindow : Window
         int current = presetChips.FindIndex(c => c.Name == _settings.ActivePreset);
         int next    = (current + 1) % presetChips.Count;
         OnChipClick(presetChips[next].Name);
+    }
+
+    // ── Customisable hotkeys ─────────────────────────────────────────────────
+
+    private static readonly string[] PresetModifierChoices =
+        { "Ctrl+Alt", "Ctrl+Shift", "Alt+Shift", "Ctrl+Alt+Shift", "Win+Alt" };
+
+    /// <summary>Which hotkey the next keypress should be assigned to, if any.</summary>
+    private string? _capturingHotkey;
+
+    private void RefreshHotkeyControls()
+    {
+        HotkeyToggleButton.Content = _settings.HotkeyToggle;
+        HotkeyCycleButton.Content  = _settings.HotkeyCycle;
+
+        if (HotkeyPresetModsBox.ItemsSource is null)
+            HotkeyPresetModsBox.ItemsSource = PresetModifierChoices;
+
+        HotkeyPresetModsBox.SelectedItem =
+            PresetModifierChoices.FirstOrDefault(
+                m => string.Equals(m, _settings.HotkeyPresetModifiers, StringComparison.OrdinalIgnoreCase))
+            ?? PresetModifierChoices[0];
+    }
+
+    private void CaptureHotkey_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.Tag is not string which) return;
+
+        _capturingHotkey = which;
+        button.Content   = "Press keys…";
+        Focus();   // so the window, not the button, sees the keystrokes
+    }
+
+    private void HotkeyPresetMods_Changed(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSettings) return;
+        if (HotkeyPresetModsBox.SelectedItem is not string mods) return;
+        if (mods == _settings.HotkeyPresetModifiers) return;
+
+        _settings.HotkeyPresetModifiers = mods;
+        _settings.Save();
+        ReapplyHotkeys();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (_capturingHotkey is null)
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            _capturingHotkey = null;
+            RefreshHotkeyControls();
+            e.Handled = true;
+            return;
+        }
+
+        // Null while only modifiers are held — keep listening for the real key.
+        var captured = Hotkey.FromKeyEvent(e.KeyModifiers, e.Key);
+        if (captured is null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        switch (_capturingHotkey)
+        {
+            case "toggle": _settings.HotkeyToggle = captured.Value.ToString(); break;
+            case "cycle":  _settings.HotkeyCycle  = captured.Value.ToString(); break;
+        }
+
+        _capturingHotkey = null;
+        _settings.Save();
+        RefreshHotkeyControls();
+        ReapplyHotkeys();
+        e.Handled = true;
+    }
+
+    private void ReapplyHotkeys()
+    {
+        if (!OperatingSystem.IsWindows() || _hwnd == IntPtr.Zero) return;
+
+        HotkeyManager.Unregister(_hwnd);
+        WarnAboutFailedHotkeys(HotkeyManager.Register(_hwnd, _settings));
+    }
+
+    /// <summary>
+    /// RegisterHotKey fails when another application already owns a combination. That used
+    /// to pass unnoticed, leaving the user with a hotkey that simply never fired.
+    /// </summary>
+    private void WarnAboutFailedHotkeys(List<string> failed)
+    {
+        if (failed.Count == 0)
+        {
+            if (_hotkeyWarningShown) { HideErrorBanner(); _hotkeyWarningShown = false; }
+            return;
+        }
+
+        _hotkeyWarningShown = true;
+        ShowHintBanner("Another application already uses " + string.Join("; ", failed) +
+                       ". Pick a different combination under Settings → Hotkeys.");
+    }
+
+    private bool _hotkeyWarningShown;
+
+    /// <summary>
+    /// Ctrl+Alt+1..9 — jump straight to the nth preset chip, in the order they appear
+    /// in the chip row. "Custom" is skipped: it is a state, not something to switch to.
+    /// Out-of-range indices (fewer presets than hotkeys) are ignored.
+    /// </summary>
+    private void SelectPresetByIndex(int index)
+    {
+        var presetChips = _chips.Where(c => c.Name != "Custom").ToList();
+        if (index < 0 || index >= presetChips.Count) return;
+
+        OnChipClick(presetChips[index].Name);
     }
 
     // ── Auto-preset switching ────────────────────────────────────────────────
