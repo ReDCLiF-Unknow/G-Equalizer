@@ -1,34 +1,48 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-06)
+## ⏭️ Start here (2026-08-07)
 
-**v3.0.1 is released and pushed. Three things are open, in priority order:**
+**v3.0.2 is released, pushed, and live.** Everything that was blocked on 2026-08-06 is closed:
+the 0-byte install was repaired (an interrupted extraction, **not** an installer bug — the rebuild
+installed cleanly), the stalled Pages deploy ran once GitHub recovered from its outage, and
+EqualizerAPO was re-attached to the playback device.
 
-1. **The local install is broken — fix first.** `C:\Program Files\GEqualizer\` contains a single
-   **0-byte** `GamingEqualizer.exe` (SHA-256 `e3b0c442…`, the empty-file hash) written 2026-08-06
-   20:00, and nothing else. An installer run failed partway through; it never got as far as
-   creating shortcuts, which is why no Start Menu entry or desktop shortcut exists. Re-run
-   `dist/G-EQ-Setup-3.0.1.exe` (needs UAC) to repair it. **Worth finding out why it failed** — if
-   it reproduces, that is a real installer bug that would hit every user, not a local fluke.
-   Ask the user whether the failed run showed an error.
-2. **The website deploy never ran.** GitHub had a *Partial System Outage* all evening; both the
-   push-triggered run and a manual dispatch **failed with "The job was not acquired by Runner of
-   type hosted even after multiple attempts"** — no runner ever picked them up. Nothing is wrong
-   with the workflow or the code. Once GitHub is healthy:
-   `gh workflow run deploy-website.yml --repo ReDCLiF-Unknow/G-Equalizer --ref main`
-   Until then the live site still serves **v3.0.0** (not broken, just stale — that release and its
-   installer still work). Verify afterwards that the footer reads `G-EQ v3.0.1`.
-3. **Comparison videos still owed** — see the Website section below.
+**Open, roughly in priority order:**
 
-**Desktop shortcut caveat:** `G-EQ.lnk` on the desktop points at
-`dist/app/GamingEqualizer.exe` (the working 3.0.1 build) because the install is broken.
-`dist/app/` is wiped by every `dotnet publish`, so **repoint the shortcut at
-`C:\Program Files\GEqualizer\` once the install is repaired.**
+1. **Nobody has confirmed the EQ is actually audible.** EqualizerAPO was re-attached at ~15:40 on
+   2026-08-07 but the machine last booted at 11:00, so the APO may not have loaded into the audio
+   pipeline yet. Registry state is correct (both CLSIDs on endpoint `{042e9d92…}`, device back in
+   EqualizerAPO's Child APOs). **Ask the user to confirm by ear** — this has never been verified
+   end to end in a session, and it cannot be: see the verification note below.
+2. **The user's installed copy predates the backdrop fix.** They installed 3.0.2 before
+   `af53aa8` toned the backdrop down, and the installer was rebuilt afterwards. Re-running
+   `dist/G-EQ-Setup-3.0.2.exe` brings the installed copy in line. Purely cosmetic.
+3. **Comparison videos still owed** — see the Website section.
+4. **macOS/Linux are stranded on 3.0.0** — three releases behind, still pre-rebrand, still
+   unverified on real hardware. The website deliberately points those two cards at the v3.0.0
+   assets, which is why **v3.0.0 must not be deleted**.
+5. **Microphone EQ** — discussed, deliberately deferred. See "Microphone EQ" below; it carries a
+   real bug worth fixing regardless.
+
+**If EqualizerAPO comes untied again:** it happened once this session — the device vanished from
+both the endpoint's `FxProperties` and EqualizerAPO's Child APOs, which is what unticking it in
+the Configurator does. The install itself was verified healthy (DLL, config, registry, both COM
+classes), so **reinstalling EqualizerAPO is the wrong move** — re-tick the device in
+`Configurator.exe` → *Playback devices* and reboot. If it detaches repeatedly, look for something
+re-enumerating the headset (SteelSeries GG, Windows Update) rather than blaming the install.
 
 **Cannot be verified from inside a session:** the app ships `requireAdministrator`, so Windows
-UIPI silently blocks synthesised mouse/keyboard input to its window. Hotkeys, banners, and any
-UI behaviour must be confirmed by the user by hand — injected keystrokes look like they succeed
-and do nothing. There is also no tool here that can screenshot a native Win32 window.
+UIPI silently blocks synthesised mouse/keyboard input to its window. Hotkeys, banners, colours and
+any UI behaviour must be confirmed by the user by hand — injected keystrokes look like they
+succeed and do nothing. There is also no tool here that can screenshot a native Win32 window, so
+**anything visual is unverifiable without asking**. Two visual bugs shipped this session because of
+that (the backdrop was far too heavy; its geometry was clipped rather than scaled) — when changing
+visuals, say plainly that it needs eyeballing rather than implying it was checked.
+
+**Rebuild ritual:** closing the app window only **hides it to the tray**, so `dotnet build` fails
+with a file lock on `bin\Debug\net10.0\GamingEqualizer.exe`. Ask the user to quit from the **tray
+icon**; `taskkill` needs elevation and has stalled on an unapproved UAC prompt before. To check
+whether code merely *compiles* while the app is running, build to a throwaway `-o` directory.
 
 ---
 
@@ -54,6 +68,59 @@ Key features:
 - First-run onboarding walkthrough (4-step modal)
 - Sound Boost: 0–20 dB preamp boost, toggle button in titlebar + slider in Settings, real-time apply
 - Persists all state across restarts
+
+---
+
+## v3.0.2 (2026-08-07)
+
+Released: [v3.0.2](https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/tag/v3.0.2), Windows only.
+Asset uploaded, download URL verified 200, live site confirmed serving `G-EQ v3.0.2`.
+
+| Change | Notes |
+|---|---|
+| Accent colour themes | Settings → ACCENT COLOUR. 14 named hues (`ThemeColors.Palette`, colour-wheel order) × 5 tones (Deep/Standard/Bright/Pastel/Neon). Swatches render each hue **at the currently selected tone**, so the row previews the actual result. Violet + Standard reproduces the original look exactly. |
+| Hideable presets | Settings → VISIBLE PRESETS. `VisiblePresets()` is the single filter every preset walk goes through — chip row, cycling, and the 1…9 hotkeys — so hiding one renumbers the rest. Hiding the active preset switches to the first visible one; the last visible preset cannot be hidden. |
+| Backdrop toned down | Was too large/dense/high-contrast and read as scribbles over the sliders. Also fixed: glyph geometry was drawn at 50×36 while `Width`/`Height` said 38×28 — a `Path` **clips** rather than scales, so outlines were cut off. Coordinates must stay in step with `HpHalfW`/`HpHalfH`. |
+
+**How runtime theming works — do not undo this.** Accent brushes were originally defined *twice*,
+inside two `Style.Resources` blocks. Style resources shadow `Application.Resources`, so any runtime
+update would have been silently swallowed. They now live **once in `Application.Resources`**, and
+~20 hard-coded hex literals across the control themes reference them via `DynamicResource`. XAML
+therefore recolours itself; anything drawn in code holds its own brushes and must be rebuilt
+explicitly — that is what `ApplyAccentTheme()` is for. `ThemeColors.Apply` is also called in the
+`MainWindow` constructor *before* controls are built, so the saved accent is used on first draw
+instead of flashing violet.
+
+Rather than hard-coding gradient pairs, each accent is generated: the gradient runs **60° around
+the wheel and slightly lighter**, which is the relationship the original violet→pink had. That is
+why every hue keeps the same character.
+
+**Known gap:** `MiniWindow` still has hard-coded violet in a couple of spots and does not follow
+the accent.
+
+### The 0-byte install (resolved)
+
+`C:\Program Files\GEqualizer\` had contained a single 0-byte `GamingEqualizer.exe` with no registry
+entry and no uninstaller — an extraction that died during the very first file copy. Re-running the
+installer fixed it completely, so **it was an interrupted run, not an installer bug**. ~100 MB
+decompressing from a solid-LZMA archive takes a while with little feedback, which is the likely
+reason it got interrupted.
+
+Verifying an install: note that **NSIS is 32-bit**, so its `HKLM` writes are redirected — the
+Add/Remove Programs entry lives under `HKLM\SOFTWARE\WOW6432Node\...\Uninstall\GEqualizer`, not the
+64-bit view. The Start Menu folder is the **per-user** one (`%APPDATA%\...\Start Menu\Programs\G-EQ`),
+not ProgramData. Checking the obvious paths reports false failures.
+
+### Microphone EQ (considered, deferred)
+
+Feasible — EqualizerAPO supports capture devices — but it needs `Device:`-scoped config sections,
+which `EQConfigWriter` does not currently emit.
+
+**This is a live bug, not just a blocker:** `BuildConfig`/`BuildPerEarConfig` write a flat
+`config.txt` with no `Device:` lines, so EqualizerAPO applies it to *every* device it is installed
+on. If a user ticks a microphone in the Configurator, **the playback EQ gets applied to their
+mic** — a +7 dB 4 kHz footstep boost on their voice. Worth fixing whether or not mic EQ is built.
+Users should be told to tick playback devices only until then.
 
 ---
 
