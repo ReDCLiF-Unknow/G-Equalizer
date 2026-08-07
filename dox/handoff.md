@@ -1,5 +1,37 @@
 # G-EQ — Handoff Document
 
+## ⏭️ Start here (2026-08-06)
+
+**v3.0.1 is released and pushed. Three things are open, in priority order:**
+
+1. **The local install is broken — fix first.** `C:\Program Files\GEqualizer\` contains a single
+   **0-byte** `GamingEqualizer.exe` (SHA-256 `e3b0c442…`, the empty-file hash) written 2026-08-06
+   20:00, and nothing else. An installer run failed partway through; it never got as far as
+   creating shortcuts, which is why no Start Menu entry or desktop shortcut exists. Re-run
+   `dist/G-EQ-Setup-3.0.1.exe` (needs UAC) to repair it. **Worth finding out why it failed** — if
+   it reproduces, that is a real installer bug that would hit every user, not a local fluke.
+   Ask the user whether the failed run showed an error.
+2. **The website deploy never ran.** GitHub had a *Partial System Outage* all evening; both the
+   push-triggered run and a manual dispatch **failed with "The job was not acquired by Runner of
+   type hosted even after multiple attempts"** — no runner ever picked them up. Nothing is wrong
+   with the workflow or the code. Once GitHub is healthy:
+   `gh workflow run deploy-website.yml --repo ReDCLiF-Unknow/G-Equalizer --ref main`
+   Until then the live site still serves **v3.0.0** (not broken, just stale — that release and its
+   installer still work). Verify afterwards that the footer reads `G-EQ v3.0.1`.
+3. **Comparison videos still owed** — see the Website section below.
+
+**Desktop shortcut caveat:** `G-EQ.lnk` on the desktop points at
+`dist/app/GamingEqualizer.exe` (the working 3.0.1 build) because the install is broken.
+`dist/app/` is wiped by every `dotnet publish`, so **repoint the shortcut at
+`C:\Program Files\GEqualizer\` once the install is repaired.**
+
+**Cannot be verified from inside a session:** the app ships `requireAdministrator`, so Windows
+UIPI silently blocks synthesised mouse/keyboard input to its window. Hotkeys, banners, and any
+UI behaviour must be confirmed by the user by hand — injected keystrokes look like they succeed
+and do nothing. There is also no tool here that can screenshot a native Win32 window.
+
+---
+
 **Date:** 2026-07-18 (rebranded "G Equalizer" → **"G-EQ"** across app/installer/website; repo made **public**; GitHub Release `v3.0.0` published with the rebuilt Windows installer; website rewritten from static HTML to **Astro + Tailwind**, made interactive (clickable presets drive real gain data in the demo section), and **deployed live via GitHub Pages**; added a side-by-side EQ-off/EQ-on video comparison section with an automatic "Coming soon" placeholder until the clips are recorded. Everything from the 2026-07-14 session below this point is unchanged/still accurate except where noted.)
 **Repo:** https://github.com/ReDCLiF-Unknow/G-Equalizer (**public** as of 2026-07-18)
 **Branch:** main
@@ -22,6 +54,37 @@ Key features:
 - First-run onboarding walkthrough (4-step modal)
 - Sound Boost: 0–20 dB preamp boost, toggle button in titlebar + slider in Settings, real-time apply
 - Persists all state across restarts
+
+---
+
+## v3.0.1 (2026-08-06)
+
+Released: [v3.0.1](https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/tag/v3.0.1), Windows only.
+Asset `G-EQ-Setup-3.0.1.exe` uploaded and its download URL verified (HTTP 200). The v3.0.0 release
+is **deliberately kept** — it is still the only source of the macOS/Linux archives, which the
+website links to — and its notes now open with a callout sending Windows users to 3.0.1.
+
+| Change | Notes |
+|---|---|
+| Customisable global hotkeys | Settings → HOTKEYS. Click *Toggle EQ* / *Cycle preset*, press the combination, Esc cancels. Preset selection takes a modifier from a dropdown. New `Hotkey.cs` parses/formats combos (`"Ctrl+Alt+E"`) and maps Avalonia key events to Win32 VKs (letters, digits, F1–F24, numpad). **Modifier-less combos are rejected on purpose** — a bare global hotkey swallows that key system-wide. |
+| Direct preset selection | `Ctrl+Alt+1…9` → nth preset chip, skipping "Custom". Hotkey ids are `HK_PRESET_BASE + 0..8`. Confirmed working by the user. |
+| Hotkey conflicts surfaced | `RegisterHotKey`'s return value used to be discarded, so a combination already owned by another app left a hotkey that silently never fired. `HotkeyManager.Register` now returns the names of what it could not claim, and the banner says what to rebind. |
+| "EQ is off" hint | **This was the cause of a real "the equalizer doesn't work" report.** Moving a slider or picking a preset while the EQ was disabled did nothing — sliders moved, the visualizer reacted, audio never changed, nothing explained why. Those paths go through `ApplyIfEnabled()`, which shows an accent-coloured banner. `SetEqState(true)` clears it. |
+| `EqApoDiagnostics` | `IsAvailable` was `Directory.Exists()` on the EqualizerAPO folder, which says nothing about audibility. Now resolves the default render endpoint via NAudio and looks for an EqualizerAPO APO in its `FxProperties`, warning when there is none. CLSIDs are resolved through their COM registration, not hard-coded. Any failure returns `Ok` — a diagnostic must never block the app. |
+| Patterned EQ backdrop | Tiled 16px speaker-grille dot lattice (`GrilleBgBrush`) plus headphone outlines scattered by `BuildHeadphoneBackdrop()`. Rejection-sampled against a circular bound so none overlap at any rotation; re-scatters on resize (>8px) and clears before rebuilding, since `OnOpened` re-fires. |
+| Version metadata | The exe carried **no version resource at all** before this. `<Version>3.0.1</Version>` added; it now reports `ProductVersion 3.0.1`, `FileVersion 3.0.1.0`. |
+
+**Do not distinguish legacy vs modern APO slots in diagnostics.** It was tried and reverted:
+confirming which is live means reading `audiodg.exe`'s loaded modules, and that is a protected
+process — it reports exactly **1 module** (itself), so absence of `EqualizerAPO.dll` there proves
+nothing. An earlier diagnosis built on that reading was wrong. EqualizerAPO's default install mode
+uses the legacy pre/post-mix slots and works on most drivers, so legacy-only is not reportable.
+
+**Dev-machine notes:** NSIS and the GitHub CLI were installed via `winget` in the previous session;
+the NSIS `inetc` plugin is vendored at `dist/nsis-plugins/x86-unicode/INetC.dll` and wired in with
+`!addplugindir`, so the installer rebuilds without needing write access to `Program Files`.
+Closing the app window only **hides it to the tray** — a rebuild will fail with a file lock until
+it is quit properly (tray → Quit), and `taskkill` needs elevation.
 
 ---
 
