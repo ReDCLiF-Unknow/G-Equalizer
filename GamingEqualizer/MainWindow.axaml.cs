@@ -1200,8 +1200,8 @@ public partial class MainWindow : Window
     // keeping every pair of centres more than a diameter apart guarantees no
     // two icons overlap no matter how they are rotated.
 
-    private const  double HpHalfW  = 25;   // glyph is 50 x 36 …
-    private const  double HpHalfH  = 18;
+    private const  double HpHalfW  = 19;   // glyph is 38 x 28 …
+    private const  double HpHalfH  = 14;
     private static readonly double HpRadius = Math.Sqrt(HpHalfW * HpHalfW + HpHalfH * HpHalfH);
 
     private readonly Random       _hpRandom  = new();
@@ -1234,7 +1234,9 @@ public partial class MainWindow : Window
             _hpLastSize = new Size(w, h);
             if (w < HpRadius * 2 || h < HpRadius * 2) return;
 
-            int    target  = (int)Math.Clamp(w * h / 20000d, 3, 16);
+            // Sparse on purpose: this sits behind the sliders, so anything denser
+            // reads as clutter around the thin slider tracks rather than texture.
+            int    target  = (int)Math.Clamp(w * h / 46000d, 2, 7);
             double minDist = HpRadius * 2 + 10;
 
             for (int placed = 0, attempts = 0; placed < target && attempts < 400; attempts++)
@@ -1261,16 +1263,18 @@ public partial class MainWindow : Window
 
     private static Avalonia.Controls.Shapes.Path MakeHeadphone(double cx, double cy, double angle)
     {
+        // Drawn to fill the 38 x 28 box below; a Path does not scale its geometry to
+        // Width/Height, it clips, so these must stay in step with HpHalfW/HpHalfH.
         var geo = new GeometryGroup();
-        geo.Children.Add(Geometry.Parse("M 5,21 A 20,20 0 0 1 45,21")); // headband
-        geo.Children.Add(new EllipseGeometry(new Rect( 1, 19, 10, 16))); // left cup
-        geo.Children.Add(new EllipseGeometry(new Rect(39, 19, 10, 16))); // right cup
+        geo.Children.Add(Geometry.Parse("M 3.8,16 A 15.2,15.2 0 0 1 34.2,16"));  // headband
+        geo.Children.Add(new EllipseGeometry(new Rect( 0.8, 14.4, 7.6, 12.2)));  // left cup
+        geo.Children.Add(new EllipseGeometry(new Rect(29.6, 14.4, 7.6, 12.2)));  // right cup
 
         var path = new Avalonia.Controls.Shapes.Path
         {
             Data                  = geo,
-            Stroke                = new SolidColorBrush(Color.Parse("#17172f")),
-            StrokeThickness       = 1.6,
+            Stroke                = new SolidColorBrush(Color.Parse("#101020")),
+            StrokeThickness       = 1.2,
             Width                 = HpHalfW * 2,
             Height                = HpHalfH * 2,
             RenderTransformOrigin = RelativePoint.Center,
