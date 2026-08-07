@@ -21,6 +21,16 @@ public class AppSettings
     public double WindowWidth { get; set; } = 820;
     public double WindowHeight { get; set; } = 610;
 
+    // Presets the user has hidden from the chip row. Hiding also removes them from
+    // the cycle order and renumbers the 1..9 selection hotkeys, so the numbers keep
+    // matching what is on screen.
+    public List<string> HiddenPresets { get; set; } = new();
+
+    // Accent: a named hue from ThemeColors.Palette plus a tone index into
+    // ThemeColors.Tones. Everything accent-coloured is derived from the pair.
+    public string AccentColor { get; set; } = ThemeColors.DefaultColor;
+    public int    AccentTone  { get; set; } = ThemeColors.DefaultTone;
+
     // Global hotkeys, stored as text ("Ctrl+Alt+E") — see Hotkey.TryParse.
     public string HotkeyToggle { get; set; } = "Ctrl+Alt+E";
     public string HotkeyCycle  { get; set; } = "Ctrl+Alt+P";

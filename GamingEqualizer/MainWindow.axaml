@@ -310,6 +310,36 @@
                                        Text="+0 dB"/>
                         </StackPanel>
 
+                        <!-- Accent colour -->
+                        <TextBlock Text="ACCENT COLOUR"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Pick a colour, then a tone. The sliders, visualizer and highlights use a gradient built from it."
+                                   TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                   Foreground="{DynamicResource TextDimBrush}"/>
+                        <WrapPanel x:Name="AccentSwatchPanel" Margin="0,0,0,10"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="Tone" VerticalAlignment="Center" Width="46"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <ComboBox x:Name="AccentToneBox" MinWidth="140"
+                                      SelectionChanged="AccentTone_Changed"/>
+                            <Button Content="Reset" Margin="16,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Click="ResetAccent_Click"/>
+                        </StackPanel>
+                        <Border x:Name="AccentPreview" Height="10" CornerRadius="5" Margin="0,0,0,20"/>
+
+                        <!-- Visible presets -->
+                        <TextBlock Text="VISIBLE PRESETS"
+                                   FontSize="10" FontWeight="Bold"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,0,0,10"/>
+                        <TextBlock Text="Untick a preset to remove it from the chip row. Hidden presets are also skipped when cycling, and the 1…9 hotkeys renumber to match."
+                                   TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8"
+                                   Foreground="{DynamicResource TextDimBrush}"/>
+                        <StackPanel x:Name="PresetVisibilityPanel" Margin="0,0,0,20"/>
+
                         <!-- Hotkeys -->
                         <TextBlock Text="HOTKEYS"
                                    FontSize="10" FontWeight="Bold"

@@ -115,6 +115,11 @@ public partial class MainWindow : Window
         _settings = AppSettings.Load();
         _presetManager.Load();
 
+        // Before any control is built, so sliders and visualizer bars pick up the
+        // saved accent on their first draw rather than flashing the default violet.
+        ThemeColors.Apply(_settings);
+        BannerHintBrush.Color = ThemeColors.Start;
+
         Width  = Math.Max(MinWidth,  _settings.WindowWidth);
         Height = Math.Max(MinHeight, _settings.WindowHeight);
     }
@@ -175,19 +180,13 @@ public partial class MainWindow : Window
 
     // ── Band color ──────────────────────────────────────────────────────────
 
-    private static Color BandColor(double t)
-    {
-        byte r = (byte)(124 + (244 - 124) * t);
-        byte g = (byte)(58  + (114 - 58)  * t);
-        byte b = (byte)(237 + (182 - 237) * t);
-        return Color.FromRgb(r, g, b);
-    }
+    private static Color BandColor(double t) => ThemeColors.Band(t);
 
     private Color VizBarColor(int barIndex, double intensity, double t)
     {
         return _settings.VizColorMode switch
         {
-            1 => Color.FromRgb(0x7c, 0x3a, 0xed),
+            1 => ThemeColors.Start,
             2 => PeakGlowColor(intensity, t),
             _ => BandColor(t)
         };
@@ -379,9 +378,20 @@ public partial class MainWindow : Window
     {
         ChipPanel.Children.Clear();
         _chips.Clear();
-        _presetManager.Presets.ToList().ForEach(p => AddChip(p.Name, onClick: () => OnChipClick(p.Name)));
+
+        foreach (var preset in VisiblePresets())
+            AddChip(preset.Name, onClick: () => OnChipClick(preset.Name));
+
         AddChip("Custom", onClick: null);
     }
+
+    /// <summary>
+    /// Presets the user has not hidden. Everything that walks presets — the chip row,
+    /// Cycle, and the 1..9 hotkeys — goes through here, so hiding one renumbers the
+    /// rest and the hotkey numbers keep matching the chips on screen.
+    /// </summary>
+    private IEnumerable<Preset> VisiblePresets() =>
+        _presetManager.Presets.Where(p => !_settings.HiddenPresets.Contains(p.Name));
 
     private void AddChip(string name, Action? onClick)
     {
@@ -575,9 +585,10 @@ public partial class MainWindow : Window
             ToggleButton.Content   = "■ DISABLE";
             ToggleButton.Theme     = DangerButtonTheme;
             StatusLabel.Text       = "EQ ACTIVE";
-            StatusLabel.Foreground = new SolidColorBrush(Color.FromRgb(167, 139, 250));
-            StatusDot.Fill         = new SolidColorBrush(Color.FromRgb(124, 58, 237));
-            StatusPill.BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x7c, 0x3a, 0xed));
+            StatusLabel.Foreground = new SolidColorBrush(ThemeColors.AccentText);
+            StatusDot.Fill         = new SolidColorBrush(ThemeColors.Start);
+            StatusPill.BorderBrush = new SolidColorBrush(
+                Color.FromArgb(0x55, ThemeColors.Start.R, ThemeColors.Start.G, ThemeColors.Start.B));
             _pulseTimer?.Start();
             HideErrorBanner();   // clears the "EQ is switched off" hint, if shown
             if (writeConfig) ApplyCurrentGains();
@@ -659,6 +670,8 @@ public partial class MainWindow : Window
         BoostLabel.Text             = $"+{_settings.BoostDb:0} dB";
         AutoPresetCheck.IsChecked   = _settings.AutoPresetEnabled;
         RefreshHotkeyControls();
+        RefreshPresetVisibilityPanel();
+        RefreshAccentControls();
 
         _mappingRows.Clear();
         foreach (var kv in _settings.ProcessPresetMap)
@@ -1046,6 +1059,7 @@ public partial class MainWindow : Window
 
     // Match the palette in App.axaml: ErrorBrush #db2777, AccentBrush #7c3aed.
     private static readonly SolidColorBrush BannerErrorBrush = new(Color.FromRgb(0xdb, 0x27, 0x77));
+    // Mutated by ApplyAccentTheme — the hint banner follows the accent colour.
     private static readonly SolidColorBrush BannerHintBrush  = new(Color.FromRgb(0x7c, 0x3a, 0xed));
 
     private void ShowErrorBanner(string message)
@@ -1525,6 +1539,169 @@ public partial class MainWindow : Window
         int current = presetChips.FindIndex(c => c.Name == _settings.ActivePreset);
         int next    = (current + 1) % presetChips.Count;
         OnChipClick(presetChips[next].Name);
+    }
+
+    // ── Accent colour ────────────────────────────────────────────────────────
+
+    private void RefreshAccentControls()
+    {
+        if (AccentToneBox.ItemsSource is null)
+            AccentToneBox.ItemsSource = ThemeColors.Tones.Select(t => t.Name).ToList();
+        AccentToneBox.SelectedIndex = Math.Clamp(_settings.AccentTone, 0, ThemeColors.Tones.Length - 1);
+
+        BuildAccentSwatches();
+        RefreshAccentPreview();
+    }
+
+    /// <summary>
+    /// One button per named hue, filled with that hue at the currently selected tone —
+    /// so the row previews exactly what picking it would give you.
+    /// </summary>
+    private void BuildAccentSwatches()
+    {
+        AccentSwatchPanel.Children.Clear();
+
+        foreach (var (name, hue) in ThemeColors.Palette)
+        {
+            bool selected = string.Equals(name, _settings.AccentColor, StringComparison.OrdinalIgnoreCase);
+
+            var swatch = new Border
+            {
+                Width           = 26,
+                Height          = 26,
+                CornerRadius    = new CornerRadius(13),
+                Margin          = new Thickness(0, 0, 6, 6),
+                Background      = new SolidColorBrush(ThemeColors.Swatch(hue, _settings.AccentTone)),
+                BorderThickness = new Thickness(selected ? 2 : 1),
+                BorderBrush     = new SolidColorBrush(selected
+                                    ? Colors.White
+                                    : Color.FromArgb(0x40, 0xff, 0xff, 0xff)),
+                Cursor          = new Cursor(StandardCursorType.Hand),
+                [ToolTip.TipProperty] = name
+            };
+
+            swatch.PointerPressed += (_, _) => SelectAccentColor(name);
+            AccentSwatchPanel.Children.Add(swatch);
+        }
+    }
+
+    private void SelectAccentColor(string name)
+    {
+        if (_settings.AccentColor == name) return;
+
+        _settings.AccentColor = name;
+        _settings.Save();
+        ApplyAccentTheme();
+        BuildAccentSwatches();   // move the selection ring
+    }
+
+    private void AccentTone_Changed(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressSettings) return;
+        if (AccentToneBox.SelectedIndex < 0) return;
+        if (AccentToneBox.SelectedIndex == _settings.AccentTone) return;
+
+        _settings.AccentTone = AccentToneBox.SelectedIndex;
+        _settings.Save();
+        ApplyAccentTheme();
+        BuildAccentSwatches();   // swatches preview the new tone
+    }
+
+    private void RefreshAccentPreview() =>
+        AccentPreview.Background = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(1, 0, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(ThemeColors.Start, 0),
+                new GradientStop(ThemeColors.End,   1)
+            }
+        };
+
+    private void ResetAccent_Click(object? sender, RoutedEventArgs e)
+    {
+        _settings.AccentColor = ThemeColors.DefaultColor;
+        _settings.AccentTone  = ThemeColors.DefaultTone;
+        _settings.Save();
+
+        ApplyAccentTheme();
+
+        _suppressSettings = true;
+        RefreshAccentControls();
+        _suppressSettings = false;
+    }
+
+    /// <summary>
+    /// Recolours everything. The XAML side follows automatically because all accent use
+    /// is DynamicResource, but anything drawn in code holds its own brushes and has to be
+    /// rebuilt: slider fills, visualizer bars, the status pill and the hint banner.
+    /// </summary>
+    private void ApplyAccentTheme()
+    {
+        ThemeColors.Apply(_settings);
+
+        BannerHintBrush.Color = ThemeColors.Start;
+
+        for (int i = 0; i < _sliders.Length; i++)
+            UpdateSliderVisual(i);
+
+        ApplyVizColorMode();
+        SetEqState(_settings.EqEnabled, writeConfig: false);
+        RefreshAccentPreview();
+        _miniWindow?.RefreshUI();
+    }
+
+    // ── Preset visibility ────────────────────────────────────────────────────
+
+    private void RefreshPresetVisibilityPanel()
+    {
+        PresetVisibilityPanel.Children.Clear();
+
+        foreach (var preset in _presetManager.Presets)
+        {
+            string name = preset.Name;
+            var check = new CheckBox
+            {
+                Content   = name,
+                IsChecked = !_settings.HiddenPresets.Contains(name),
+                Margin    = new Thickness(0, 0, 0, 2)
+            };
+            check.IsCheckedChanged += (_, _) => TogglePresetVisibility(name, check);
+            PresetVisibilityPanel.Children.Add(check);
+        }
+    }
+
+    private void TogglePresetVisibility(string name, CheckBox source)
+    {
+        if (_suppressSettings) return;
+
+        bool wantVisible = source.IsChecked == true;
+
+        // Hiding the last one would leave a chip row with nothing to click.
+        if (!wantVisible && VisiblePresets().Count() <= 1)
+        {
+            _suppressSettings = true;
+            source.IsChecked  = true;
+            _suppressSettings = false;
+            ShowHintBanner("At least one preset has to stay visible.");
+            return;
+        }
+
+        if (wantVisible) _settings.HiddenPresets.Remove(name);
+        else if (!_settings.HiddenPresets.Contains(name)) _settings.HiddenPresets.Add(name);
+
+        // If the preset in use was just hidden, move to one that is still on screen
+        // rather than leaving the row with nothing selected.
+        if (!wantVisible && _settings.ActivePreset == name)
+        {
+            var fallback = VisiblePresets().FirstOrDefault();
+            if (fallback != null) OnChipClick(fallback.Name);
+        }
+
+        _settings.Save();
+        BuildPresetChips();
+        SetActiveChip(string.IsNullOrEmpty(_settings.ActivePreset) ? "Custom" : _settings.ActivePreset);
     }
 
     // ── Customisable hotkeys ─────────────────────────────────────────────────

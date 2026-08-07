@@ -1,4 +1,4 @@
-<Application xmlns="https://github.com/avaloniaui"
+﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="GamingEqualizer.App"
              RequestedThemeVariant="Dark">
@@ -7,7 +7,23 @@
     <Application.Resources>
         <ResourceDictionary>
 
-            <!-- ── Default Button ─────────────────────────────────────────── -->
+            <!-- â”€â”€ Accent palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                 Defined here (not in Style.Resources) so ThemeColors.Apply can
+                 replace them at runtime â€” style resources would shadow these and
+                 the UI would never repaint. All accent use is DynamicResource;
+                 the values below are only the defaults before settings load. -->
+            <SolidColorBrush x:Key="AccentBrush"       Color="#7c3aed"/>
+            <SolidColorBrush x:Key="AccentPinkBrush"   Color="#f472b6"/>
+            <SolidColorBrush x:Key="AccentTextBrush"   Color="#a78bfa"/>
+            <SolidColorBrush x:Key="AccentSoftBrush"   Color="#c4b5fd"/>
+            <SolidColorBrush x:Key="AccentDeepBrush"   Color="#5b21b6"/>
+            <SolidColorBrush x:Key="AccentChipBgBrush" Color="#2d1060"/>
+            <SolidColorBrush x:Key="AccentBrush55"     Color="#557c3aed"/>
+            <SolidColorBrush x:Key="AccentBrush99"     Color="#997c3aed"/>
+            <SolidColorBrush x:Key="AccentBrush1A"     Color="#1a7c3aed"/>
+            <SolidColorBrush x:Key="AccentBrush2A"     Color="#2a7c3aed"/>
+
+            <!-- â”€â”€ Default Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
             <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
                 <Setter Property="Background"      Value="#0d0d1a"/>
                 <Setter Property="Foreground"      Value="#c4c4d0"/>
@@ -45,8 +61,8 @@
 
             <!-- Primary button (deep violet) -->
             <ControlTheme x:Key="PrimaryButtonTheme" TargetType="Button">
-                <Setter Property="Background"      Value="#5b21b6"/>
-                <Setter Property="BorderBrush"     Value="#7c3aed"/>
+                <Setter Property="Background"      Value="{DynamicResource AccentDeepBrush}"/>
+                <Setter Property="BorderBrush"     Value="{DynamicResource AccentBrush}"/>
                 <Setter Property="Foreground"      Value="#ede9fe"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding"         Value="12,6"/>
@@ -69,7 +85,7 @@
                 </Setter>
                 <Style Selector="^:pointerover /template/ Border#Bd">
                     <Setter Property="Background"  Value="#6d28d9"/>
-                    <Setter Property="BorderBrush" Value="#a78bfa"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentTextBrush}"/>
                 </Style>
                 <Style Selector="^:pressed /template/ Border#Bd">
                     <Setter Property="Background" Value="#4c1d95"/>
@@ -83,7 +99,7 @@
             <ControlTheme x:Key="DangerButtonTheme" TargetType="Button">
                 <Setter Property="Background"      Value="#db277710"/>
                 <Setter Property="BorderBrush"     Value="#db277766"/>
-                <Setter Property="Foreground"      Value="#f472b6"/>
+                <Setter Property="Foreground"      Value="{DynamicResource AccentPinkBrush}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Padding"         Value="12,6"/>
                 <Setter Property="Cursor"          Value="Hand"/>
@@ -105,7 +121,7 @@
                 </Setter>
                 <Style Selector="^:pointerover /template/ Border#Bd">
                     <Setter Property="Background" Value="#db27771a"/>
-                    <Setter Property="BorderBrush" Value="#f472b6"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentPinkBrush}"/>
                 </Style>
             </ControlTheme>
 
@@ -127,7 +143,7 @@
                     </ControlTemplate>
                 </Setter>
                 <Style Selector="^:pointerover">
-                    <Setter Property="Foreground" Value="#f472b6"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AccentPinkBrush}"/>
                 </Style>
                 <Style Selector="^:pressed">
                     <Setter Property="Foreground" Value="#db2777"/>
@@ -160,17 +176,17 @@
                     </ControlTemplate>
                 </Setter>
                 <Style Selector="^:pointerover /template/ Border#Bd">
-                    <Setter Property="BorderBrush" Value="#7c3aed55"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush55}"/>
                 </Style>
                 <Style Selector="^:pointerover">
                     <Setter Property="Foreground" Value="#8877cc"/>
                 </Style>
                 <Style Selector="^:checked /template/ Border#Bd">
-                    <Setter Property="BorderBrush" Value="#7c3aed"/>
-                    <Setter Property="Background"  Value="#2d1060"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                    <Setter Property="Background"  Value="{DynamicResource AccentChipBgBrush}"/>
                 </Style>
                 <Style Selector="^:checked">
-                    <Setter Property="Foreground" Value="#c4b5fd"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AccentSoftBrush}"/>
                 </Style>
             </ControlTheme>
 
@@ -180,7 +196,7 @@
     <Application.Styles>
         <FluentTheme/>
 
-        <!-- ── Palette ─────────────────────────────────────────────────── -->
+        <!-- â”€â”€ Palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <Style Selector="Window, UserControl">
             <Style.Resources>
                 <SolidColorBrush x:Key="BackgroundBrush"    Color="#06060e"/>
@@ -189,9 +205,6 @@
                 <SolidColorBrush x:Key="SectionBgBrush"     Color="#08080f"/>
                 <SolidColorBrush x:Key="SurfaceBrush"       Color="#0d0d1a"/>
                 <SolidColorBrush x:Key="SectionBorderBrush" Color="#181828"/>
-                <SolidColorBrush x:Key="AccentBrush"        Color="#7c3aed"/>
-                <SolidColorBrush x:Key="AccentPinkBrush"    Color="#f472b6"/>
-                <SolidColorBrush x:Key="AccentTextBrush"    Color="#a78bfa"/>
                 <SolidColorBrush x:Key="TextBrush"          Color="#c4c4d0"/>
                 <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
                 <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
@@ -235,9 +248,6 @@
                 <SolidColorBrush x:Key="SectionBgBrush"     Color="#08080f"/>
                 <SolidColorBrush x:Key="SurfaceBrush"       Color="#0d0d1a"/>
                 <SolidColorBrush x:Key="SectionBorderBrush" Color="#181828"/>
-                <SolidColorBrush x:Key="AccentBrush"        Color="#7c3aed"/>
-                <SolidColorBrush x:Key="AccentPinkBrush"    Color="#f472b6"/>
-                <SolidColorBrush x:Key="AccentTextBrush"    Color="#a78bfa"/>
                 <SolidColorBrush x:Key="TextBrush"          Color="#c4c4d0"/>
                 <SolidColorBrush x:Key="TextDimBrush"       Color="#44445a"/>
                 <SolidColorBrush x:Key="MutedTextBrush"     Color="#2a2a44"/>
@@ -272,47 +282,47 @@
             </Style.Resources>
         </Style>
 
-        <!-- ── ScrollBar ──────────────────────────────────────────────────── -->
+        <!-- â”€â”€ ScrollBar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <Style Selector="ScrollBar">
             <Setter Property="Width"      Value="6"/>
             <Setter Property="MinWidth"   Value="6"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <Style Selector="ScrollBar /template/ Thumb">
-            <Setter Property="Background"   Value="#7c3aed"/>
+            <Setter Property="Background"   Value="{DynamicResource AccentBrush}"/>
             <Setter Property="CornerRadius" Value="3"/>
         </Style>
         <Style Selector="ScrollBar /template/ Thumb:pointerover">
-            <Setter Property="Background" Value="#a78bfa"/>
+            <Setter Property="Background" Value="{DynamicResource AccentTextBrush}"/>
         </Style>
         <Style Selector="ScrollBar /template/ Thumb:pressed">
-            <Setter Property="Background" Value="#f472b6"/>
+            <Setter Property="Background" Value="{DynamicResource AccentPinkBrush}"/>
         </Style>
 
-        <!-- ── TextBox ────────────────────────────────────────────────────── -->
+        <!-- â”€â”€ TextBox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <Style Selector="TextBox">
             <Setter Property="Background"      Value="#0d0d1a"/>
             <Setter Property="Foreground"      Value="#c4c4d0"/>
             <Setter Property="BorderBrush"     Value="#252538"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"         Value="8,6"/>
-            <Setter Property="CaretBrush"      Value="#a78bfa"/>
+            <Setter Property="CaretBrush"      Value="{DynamicResource AccentTextBrush}"/>
             <Setter Property="CornerRadius"    Value="4"/>
         </Style>
         <Style Selector="TextBox:focus">
-            <Setter Property="BorderBrush" Value="#7c3aed99"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush99}"/>
         </Style>
         <Style Selector="TextBox:pointerover">
-            <Setter Property="BorderBrush" Value="#7c3aed55"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush55}"/>
         </Style>
 
-        <!-- ── CheckBox ───────────────────────────────────────────────────── -->
+        <!-- â”€â”€ CheckBox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <Style Selector="CheckBox">
             <Setter Property="Foreground" Value="#c4c4d0"/>
             <Setter Property="Cursor"     Value="Hand"/>
         </Style>
 
-        <!-- ── ComboBox ───────────────────────────────────────────────────── -->
+        <!-- â”€â”€ ComboBox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
         <Style Selector="ComboBox">
             <Setter Property="Background"      Value="#0d0d1a"/>
             <Setter Property="Foreground"      Value="#c4c4d0"/>
@@ -326,10 +336,10 @@
             <Setter Property="Foreground" Value="#c4c4d0"/>
         </Style>
         <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#7c3aed1a"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush1A}"/>
         </Style>
         <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="#7c3aed2a"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush2A}"/>
         </Style>
 
         <!-- Class-based helpers for code-behind theme switching -->
