@@ -14,7 +14,7 @@ Unicode True
 
 !define APP_NAME       "G-EQ"
 !define APP_EXE        "GamingEqualizer.exe"
-!define APP_VERSION    "3.0.1"
+!define APP_VERSION    "3.0.2"
 !define PUBLISHER      "ReDCLiF"
 !define INSTALL_DIR    "$PROGRAMFILES64\GEqualizer"
 !define REG_UNINSTALL  "Software\Microsoft\Windows\CurrentVersion\Uninstall\GEqualizer"

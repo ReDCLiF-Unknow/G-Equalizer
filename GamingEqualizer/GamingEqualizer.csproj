@@ -9,7 +9,7 @@
     <AssemblyTitle>G-EQ</AssemblyTitle>
     <Product>G-EQ</Product>
     <Description>G-EQ</Description>
-    <Version>3.0.1</Version>
+    <Version>3.0.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ImplicitUsings>enable</ImplicitUsings>

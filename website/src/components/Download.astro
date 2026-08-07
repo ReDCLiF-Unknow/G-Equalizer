@@ -1,16 +1,16 @@
 ---
-const WIN_RELEASE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/download/v3.0.1";
+const WIN_RELEASE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/download/v3.0.2";
 // macOS/Linux archives have not been rebuilt since 3.0.0 — keep them pointed there
-// rather than at a 3.0.1 tag that carries no assets for those platforms.
+// rather than at a newer tag that carries no assets for those platforms.
 const OLD_RELEASE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/download/v3.0.0";
 const OLD_RELEASE_PAGE = "https://github.com/ReDCLiF-Unknow/G-Equalizer/releases/tag/v3.0.0";
 
 const platforms = [
   {
     os: "Windows",
-    fmt: "G-EQ-Setup-3.0.1.exe · ~31 MB",
+    fmt: "G-EQ-Setup-3.0.2.exe · ~31 MB",
     cta: "Download installer",
-    href: `${WIN_RELEASE}/G-EQ-Setup-3.0.1.exe`,
+    href: `${WIN_RELEASE}/G-EQ-Setup-3.0.2.exe`,
     stale: false,
   },
   {
@@ -56,7 +56,7 @@ const platforms = [
             </span>
             {p.stale && (
               <span class="mono text-[10.5px] text-text-dim/80">
-                Still on 3.0.0 — predates the G-EQ rename and the 3.0.1 fixes
+                Still on 3.0.0 — predates the G-EQ rename and everything since
               </span>
             )}
           </a>
