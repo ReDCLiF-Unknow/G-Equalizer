@@ -17,6 +17,11 @@ const defaultPreset = "PUBG";
 const heightForGain = (gain: number) => Math.abs(gain) * 6;
 const labelForGain = (gain: number) => (gain > 0 ? `+${gain}` : `${gain}`);
 
+// Fills grow away from the centre line: up for a boost, down for a cut.
+const fillStyle = (gain: number) =>
+  `${gain >= 0 ? "bottom" : "top"}:50%; height:${heightForGain(gain)}px;` +
+  " background: linear-gradient(180deg, var(--accent-2), var(--accent));";
+
 // Small fixed per-bar offsets so the 20-bar spectrum reads as an organic
 // waveform rather than a stair-step of exact duplicate pairs, same idea as
 // the app's own AudioSpectrumAnalyzer interpolating 10 bands -> 80 bars.
@@ -100,16 +105,38 @@ const bars = barsForPreset(presets[defaultPreset]);
         {
           presets[defaultPreset].map((gain, i) => (
             <div class="flex flex-1 flex-col items-center gap-1.5">
-              <span class="demo-gain mono text-[9px] text-text-dim" data-band={i}>
+              <span
+                class="demo-gain mono text-[9px] text-text-dim"
+                id={`value-${freqs[i]}`}
+                data-band={i}
+              >
                 {labelForGain(gain)}
               </span>
-              <div class="relative h-[46px] w-[3px] overflow-hidden rounded-sm bg-line">
-                <div
-                  class="demo-fill absolute bottom-1/2 left-0 w-full rounded-sm transition-[height] duration-200"
+
+              {/* A real range input sits invisibly over the drawn track: it makes the
+                  slider draggable and keyboard-accessible for free, instead of the
+                  track being a picture of a control that does nothing. */}
+              <div class="relative flex h-[46px] w-full justify-center">
+                <div class="relative h-[46px] w-[3px] overflow-hidden rounded-sm bg-line">
+                  <div
+                    class="demo-fill absolute left-0 w-full rounded-sm transition-[height] duration-200"
+                    data-band={i}
+                    style={fillStyle(gain)}
+                  />
+                </div>
+                <input
+                  type="range"
+                  min="-12"
+                  max="12"
+                  step="1"
+                  value={gain}
+                  id={`slider-${freqs[i]}`}
                   data-band={i}
-                  style={`height:${heightForGain(gain)}px; background: linear-gradient(180deg, var(--accent-2), var(--accent));`}
+                  aria-label={`${freqs[i].endsWith("k") ? `${freqs[i].slice(0, -1)} kHz` : `${freqs[i]} Hz`} band gain in decibels`}
+                  class="demo-slider absolute top-1/2 left-1/2 h-6 w-[46px] -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-ns-resize opacity-0"
                 />
               </div>
+
               <span class="mono text-[8px] text-text-dim">{freqs[i]}</span>
             </div>
           ))
@@ -136,18 +163,36 @@ const bars = barsForPreset(presets[defaultPreset]);
     return out;
   }
 
+  const STORAGE_KEY = "geq-demo-state";
+
   const chipEls = Array.from(document.querySelectorAll(".demo-chip"));
+  const sliders = Array.from(document.querySelectorAll(".demo-slider"));
   const title = document.getElementById("demoTitle");
+
+  let bands = [...presets[defaultPreset]];
   let active = defaultPreset;
 
-  function render(name) {
-    active = name;
-    const bands = presets[name];
+  // Restore whatever the visitor last dialled in. Guarded because localStorage
+  // throws in private mode, and the stored value is user-editable.
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (saved && Array.isArray(saved.bands) && saved.bands.length === 10) {
+      bands = saved.bands.map((n) => Math.max(-12, Math.min(12, Number(n) || 0)));
+      active = typeof saved.active === "string" ? saved.active : "Custom";
+    }
+  } catch {}
 
-    if (title) title.textContent = `G-EQ — ${name}`;
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bands, active }));
+    } catch {}
+  }
+
+  function render() {
+    if (title) title.textContent = `G-EQ — ${active}`;
 
     chipEls.forEach((el) => {
-      const isActive = el.dataset.preset === name;
+      const isActive = el.dataset.preset === active;
       el.classList.toggle("border-accent", isActive);
       el.classList.toggle("text-text", isActive);
       el.classList.toggle("border-line", !isActive);
@@ -158,24 +203,46 @@ const bars = barsForPreset(presets[defaultPreset]);
     });
 
     document.querySelectorAll(".demo-fill").forEach((el) => {
-      const i = Number(el.dataset.band);
-      el.style.height = `${heightForGain(bands[i])}px`;
+      const gain = bands[Number(el.dataset.band)];
+      el.style.height = `${heightForGain(gain)}px`;
+      // Boost grows up from the centre line, cut grows down.
+      el.style.bottom = gain >= 0 ? "50%" : "auto";
+      el.style.top = gain >= 0 ? "auto" : "50%";
     });
+
     document.querySelectorAll(".demo-gain").forEach((el) => {
-      const i = Number(el.dataset.band);
-      el.textContent = labelForGain(bands[i]);
+      el.textContent = labelForGain(bands[Number(el.dataset.band)]);
+    });
+
+    // Assigning .value does not re-fire "input", so this cannot loop.
+    sliders.forEach((el) => {
+      el.value = String(bands[Number(el.dataset.band)]);
     });
 
     const newBars = barsForPreset(bands);
     document.querySelectorAll(".demo-bar").forEach((el) => {
-      const i = Number(el.dataset.bar);
-      el.style.height = `${newBars[i]}%`;
+      el.style.height = `${newBars[Number(el.dataset.bar)]}%`;
     });
   }
 
-  chipEls.forEach((el) => {
-    el.addEventListener("click", () => {
-      if (el.dataset.preset !== active) render(el.dataset.preset);
+  sliders.forEach((el) => {
+    el.addEventListener("input", () => {
+      bands[Number(el.dataset.band)] = Number(el.value);
+      // Hand-tuned curve is no longer any named preset — same as the app.
+      active = "Custom";
+      save();
+      render();
     });
   });
+
+  chipEls.forEach((el) => {
+    el.addEventListener("click", () => {
+      active = el.dataset.preset;
+      bands = [...presets[active]];
+      save();
+      render();
+    });
+  });
+
+  render();
 </script>
