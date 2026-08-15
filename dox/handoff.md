@@ -21,13 +21,18 @@ registers as `C:\Program Files\GEqualizer\GamingEqualizer.exe --minimized`, `Run
 `LogonType=InteractiveToken`, logon trigger `PT10S`, and the running app holds `Ctrl+Q`, `Ctrl+E`
 and `Ctrl+Alt+1`.
 
-**The one thing still unverified is the reboot on the shipped build.** Restart, wait ~10s past
-logon, and confirm the tray icon appears. **Probe the hotkeys to confirm initialisation ran** —
-`Ctrl+Q` reading TAKEN proves `OnOpened` executed. Do **not** use `config.txt` as the signal:
-`RestoreState()` calls `SetEqState(…, writeConfig: false)`, so a fresh start deliberately does not
-write it. (A reboot test on 2026-08-15 was wasted on exactly that mistake, compounded by a Debug
-instance and the installed copy both running — whichever starts first takes the hotkeys and the
-other silently gets none. Run one instance when testing.)
+**The reboot test passed on the shipped build (2026-08-15, 23:23 boot).** The task fired at
+23:24:05 — logon plus the `PT10S` delay — starting the installed copy. Only a tray icon appeared;
+no window, which is the point of `--minimized`. `Ctrl+Q`, `Ctrl+E` and `Ctrl+Alt+1` were all held
+by the app afterwards, and since `HotkeyManager.Register` runs inside `MainWindow.OnOpened`, that
+proves initialisation ran on a minimized start. Autostart is done: elevated, no UAC prompt at
+logon, preset and hotkeys live.
+
+**If you ever need to re-test it:** probe the hotkeys, not `config.txt`. `RestoreState()` calls
+`SetEqState(…, writeConfig: false)`, so a fresh start deliberately does not write the APO config —
+an earlier attempt was wasted on that mistake. Always probe an unused combination too, to prove the
+test discriminates, and run exactly one instance: with two, whichever starts first takes the
+hotkeys and the other silently gets none, which is what muddied the first attempt.
 
 **A caution about the diagnosis, because it cost an hour.** Several rounds were spent chasing a
 phantom fourth bug: the box appeared to tick while `LaunchWithWindows` stayed `false`, no task
@@ -392,9 +397,10 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **The reboot path is untested on the shipped build** — restart, then probe `Ctrl+Q` (TAKEN ⇒ initialisation ran) | **Open**, and the last item on this work |
+| **3.0.3 is not published** — no git tag, no GitHub Release, no uploaded asset; the website still advertises 3.0.2 | **Open.** The built installer is committed at `dist/G-EQ-Setup-3.0.3.exe` |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
-| Windows artifact predated every fix in this cycle | Fixed — `G-EQ-Setup-3.0.3.exe` built from `1fdbc0e` and installed |
+| Windows artifact predated every fix in this cycle | Fixed — `G-EQ-Setup-3.0.3.exe` built from `1fdbc0e`, installed, reboot-verified |
+| Autostart end to end (task fires → app initialises → hotkeys live) | **Verified** on the shipped build, 2026-08-15 |
 | "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed (`fca165a`), verified: tick creates the task, untick deletes it |
 | `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed (`2eed91c`), verified via `EnumWindows` (hidden window exists) and hotkey probing (both bindings held) |
 | Hotkey rebinding never worked — capture ran with the app's own hotkeys still registered, so they swallowed the keystrokes | Fixed (`06d09af`), verified: rebound to Ctrl+Q/Ctrl+E, both registered, old Ctrl+Alt+E released |
