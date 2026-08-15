@@ -632,6 +632,9 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object? sender, RoutedEventArgs e)
     {
+        // Leaving the panel mid-capture would otherwise strand the hotkeys unregistered.
+        CancelHotkeyCapture();
+
         _settingsPanelOpen       = !_settingsPanelOpen;
         SettingsPanel.IsVisible  = _settingsPanelOpen;
         SettingsNavButton.Content = _settingsPanelOpen ? "← Back" : "⚙ Settings";
@@ -654,32 +657,41 @@ public partial class MainWindow : Window
         if (LaunchWithWindowsPanel != null)
             LaunchWithWindowsPanel.IsVisible = OperatingSystem.IsWindows();
 
+        // try/finally matters here: _suppressSettings gates every handler in this panel, so a
+        // throw anywhere below would leave it stuck true and silently deaden the entire
+        // Settings panel until restart, with nothing logged.
         _suppressSettings = true;
-        LaunchWithWindowsCheck.IsChecked = IsStartupRegistered();
-        DefaultPresetCombo.Items.Clear();
-        foreach (var preset in _presetManager.Presets)
-            DefaultPresetCombo.Items.Add(preset.Name);
-        DefaultPresetCombo.SelectedItem = string.IsNullOrEmpty(_settings.DefaultPreset)
-            ? "Flat" : _settings.DefaultPreset;
-        BoostEnabledCheck.IsChecked = _settings.BoostEnabled;
-        BoostSlider.Value           = _settings.BoostDb;
-        BoostLabel.Text             = $"+{_settings.BoostDb:0} dB";
-        AutoPresetCheck.IsChecked   = _settings.AutoPresetEnabled;
-        RefreshHotkeyControls();
-        RefreshPresetVisibilityPanel();
-        RefreshAccentControls();
+        try
+        {
+            LaunchWithWindowsCheck.IsChecked = IsStartupRegistered();
+            DefaultPresetCombo.Items.Clear();
+            foreach (var preset in _presetManager.Presets)
+                DefaultPresetCombo.Items.Add(preset.Name);
+            DefaultPresetCombo.SelectedItem = string.IsNullOrEmpty(_settings.DefaultPreset)
+                ? "Flat" : _settings.DefaultPreset;
+            BoostEnabledCheck.IsChecked = _settings.BoostEnabled;
+            BoostSlider.Value           = _settings.BoostDb;
+            BoostLabel.Text             = $"+{_settings.BoostDb:0} dB";
+            AutoPresetCheck.IsChecked   = _settings.AutoPresetEnabled;
+            RefreshHotkeyControls();
+            RefreshPresetVisibilityPanel();
+            RefreshAccentControls();
 
-        _mappingRows.Clear();
-        foreach (var kv in _settings.ProcessPresetMap)
-            _mappingRows.Add(new ProcessMappingRow { Exe = kv.Key, Preset = kv.Value });
-        MappingList.ItemsSource = _mappingRows;
+            _mappingRows.Clear();
+            foreach (var kv in _settings.ProcessPresetMap)
+                _mappingRows.Add(new ProcessMappingRow { Exe = kv.Key, Preset = kv.Value });
+            MappingList.ItemsSource = _mappingRows;
 
-        NewPresetCombo.Items.Clear();
-        foreach (var p in _presetManager.Presets)
-            NewPresetCombo.Items.Add(p.Name);
-        if (NewPresetCombo.Items.Count > 0)
-            NewPresetCombo.SelectedIndex = 0;
-        _suppressSettings = false;
+            NewPresetCombo.Items.Clear();
+            foreach (var p in _presetManager.Presets)
+                NewPresetCombo.Items.Add(p.Name);
+            if (NewPresetCombo.Items.Count > 0)
+                NewPresetCombo.SelectedIndex = 0;
+        }
+        finally
+        {
+            _suppressSettings = false;
+        }
     }
 
     private static bool IsStartupRegistered() => StartupTask.IsRegistered();
@@ -1076,8 +1088,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Read the live binding rather than hardcoding it. This said "Ctrl+Alt+E" no matter
+        // what the toggle was actually bound to, so after any rebind it pointed the user at a
+        // combination that did nothing.
+        string toggle = string.IsNullOrWhiteSpace(_settings.HotkeyToggle)
+            ? string.Empty
+            : $" (or press {_settings.HotkeyToggle})";
+
         ShowHintBanner("The EQ is switched off, so this won't change what you hear — "
-                     + "click ENABLE (or press Ctrl+Alt+E) to turn it on.");
+                     + $"click ENABLE{toggle} to turn it on.");
     }
 
     private void ShowEqApoMissingBanner()
@@ -1718,7 +1737,26 @@ public partial class MainWindow : Window
 
         _capturingHotkey = which;
         button.Content   = "Press keys…";
+
+        // A registered global hotkey is delivered to its owner as WM_HOTKEY and never reaches
+        // the focused window as key input, so with our own hotkeys still registered the exact
+        // combinations the user is most likely to press — the current bindings — could not be
+        // captured at all; pressing Ctrl+Alt+E to rebind it just toggled the EQ instead.
+        // Release them for the duration of the capture; every exit path re-registers.
+        if (OperatingSystem.IsWindows() && _hwnd != IntPtr.Zero)
+            HotkeyManager.Unregister(_hwnd);
+
         Focus();   // so the window, not the button, sees the keystrokes
+    }
+
+    /// <summary>Leaves capture mode and puts the global hotkeys back, whatever the exit route.</summary>
+    private void CancelHotkeyCapture()
+    {
+        if (_capturingHotkey is null) return;
+
+        _capturingHotkey = null;
+        RefreshHotkeyControls();
+        ReapplyHotkeys();
     }
 
     private void HotkeyPresetMods_Changed(object? sender, SelectionChangedEventArgs e)
@@ -1742,8 +1780,7 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            _capturingHotkey = null;
-            RefreshHotkeyControls();
+            CancelHotkeyCapture();
             e.Handled = true;
             return;
         }

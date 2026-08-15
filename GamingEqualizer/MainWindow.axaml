@@ -256,13 +256,14 @@
 
                         <!-- Launch with Windows (Windows-only) -->
                         <StackPanel x:Name="LaunchWithWindowsPanel" Orientation="Horizontal" Margin="0,0,0,20">
+                            <!-- Caption belongs to the CheckBox, not a sibling TextBlock: as a
+                                 sibling the words are not a hit target, so clicking them looks
+                                 like a dead control. -->
                             <CheckBox x:Name="LaunchWithWindowsCheck"
                                       VerticalAlignment="Center"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      Content="Launch with Windows (starts minimized to tray)"
                                       IsCheckedChanged="LaunchWithWindows_Changed"/>
-                            <TextBlock Text="Launch with Windows (starts minimized to tray)"
-                                       VerticalAlignment="Center"
-                                       Margin="8,0,0,0"
-                                       Foreground="{DynamicResource TextBrush}"/>
                         </StackPanel>
 
                         <!-- Default preset -->
@@ -291,11 +292,9 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <CheckBox x:Name="BoostEnabledCheck"
                                       VerticalAlignment="Center"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      Content="Enable boost"
                                       IsCheckedChanged="Boost_Changed"/>
-                            <TextBlock Text="Enable boost"
-                                       VerticalAlignment="Center"
-                                       Margin="8,0,0,0"
-                                       Foreground="{DynamicResource TextBrush}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
                             <Slider x:Name="BoostSlider"
@@ -412,11 +411,9 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                             <CheckBox x:Name="AutoPresetCheck"
                                       VerticalAlignment="Center"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      Content="Switch preset when foreground app changes"
                                       IsCheckedChanged="AutoPreset_Changed"/>
-                            <TextBlock Text="Switch preset when foreground app changes"
-                                       VerticalAlignment="Center"
-                                       Margin="8,0,0,0"
-                                       Foreground="{DynamicResource TextBrush}"/>
                         </StackPanel>
 
                         <!-- Mapping list -->
