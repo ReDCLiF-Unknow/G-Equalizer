@@ -13,13 +13,21 @@ detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on 2026-08-13.
 to the tray and the next build fails on a file lock. Quit from the **tray icon**; `taskkill` needs
 elevation. To check that code merely compiles while it runs, build to a throwaway `-o` directory.
 
-**"Launch with Windows" now works, verified through the app's own code path.** Branch
-`fix/launch-with-windows-init` — pushed, **not merged**. On 2026-08-15, against a real build:
-opening Settings with a task present showed the box ticked (`IsRegistered()` reads correctly),
-unticking deleted the task, ticking recreated it, and the app-generated XML registered as
-`RunLevel=HIGHEST`, `LogonType=InteractiveToken`, logon trigger `PT10S`, `--minimized`,
-`ExecutionTimeLimit=PT0S`, both battery settings false. **The only unverified step left is the
-reboot itself** — restart and confirm the tray icon appears and the hotkeys respond.
+**v3.0.3 is built, committed to `main` (`1fdbc0e`) and installed.** `fix/launch-with-windows-init`
+was merged (fast-forward) and shipped. "Launch with Windows" works, verified through the app's own
+code path: opening Settings with a task present shows the box ticked (`IsRegistered()` reads
+correctly), unticking deletes the task, ticking recreates it. On the installed 3.0.3 the task
+registers as `C:\Program Files\GEqualizer\GamingEqualizer.exe --minimized`, `RunLevel=HIGHEST`,
+`LogonType=InteractiveToken`, logon trigger `PT10S`, and the running app holds `Ctrl+Q`, `Ctrl+E`
+and `Ctrl+Alt+1`.
+
+**The one thing still unverified is the reboot on the shipped build.** Restart, wait ~10s past
+logon, and confirm the tray icon appears. **Probe the hotkeys to confirm initialisation ran** —
+`Ctrl+Q` reading TAKEN proves `OnOpened` executed. Do **not** use `config.txt` as the signal:
+`RestoreState()` calls `SetEqState(…, writeConfig: false)`, so a fresh start deliberately does not
+write it. (A reboot test on 2026-08-15 was wasted on exactly that mistake, compounded by a Debug
+instance and the installed copy both running — whichever starts first takes the hotkeys and the
+other silently gets none. Run one instance when testing.)
 
 **A caution about the diagnosis, because it cost an hour.** Several rounds were spent chasing a
 phantom fourth bug: the box appeared to tick while `LaunchWithWindows` stayed `false`, no task
@@ -165,6 +173,24 @@ Key features:
 - First-run onboarding walkthrough (4-step modal)
 - Sound Boost: 0–20 dB preamp boost, toggle button in titlebar + slider in Settings, real-time apply
 - Persists all state across restarts
+
+---
+
+## v3.0.3 (2026-08-15)
+
+Built and installed from `1fdbc0e`, Windows only. **No GitHub Release published yet** — the asset
+exists at `dist/G-EQ-Setup-3.0.3.exe` and is committed, but nothing has been tagged or uploaded,
+and the website still advertises 3.0.2.
+
+| Change | Notes |
+|---|---|
+| "Launch with Windows" rewritten as a logon task | `Platform/StartupTask.cs`. A Run value could never have fired: the app is `requireAdministrator` and Windows silently skips elevated Run entries at logon. Uses `schtasks /Create /XML` — the XML form is required to reach `ExecutionTimeLimit=PT0S` (CLI default `P3D` would kill a tray app after three days) and the battery settings (CLI defaults would block it on a laptop). `PT10S` delay so the APO health check does not query the audio endpoint too early. |
+| `--minimized` start now initialises | `App.axaml.cs` never called `Show()` for a minimized start, but `MainWindow.OnOpened` is where sliders, `RestoreState()`, hotkeys, the auto-preset timer and the APO check all live, and it fires only on the first `Show()`. An autostarted G-EQ was an inert tray icon. Now shown minimized then hidden. |
+| Hotkey rebinding fixed | Capture ran with the app's own hotkeys still registered, and a registered combination goes to its owner as `WM_HOTKEY` without reaching the focused window — so the current bindings could never be captured. Registration is released during capture, restored on every exit path. |
+| Checkbox captions clickable | All three settings checkboxes had the caption as a sibling `TextBlock`, leaving only the ~16px box as a hit target. |
+| First-run wizard actually fires | The `Opened` handler was attached *after* `Show()`, which is when `Opened` fires — dead on arrival on every install since the Avalonia migration. |
+| "EQ is switched off" hint | Hardcoded `Ctrl+Alt+E`; now reads `_settings.HotkeyToggle`. |
+| Uninstaller deletes the logon task | Only from 3.0.3 on — uninstalling an older build strands the task. |
 
 ---
 
@@ -327,12 +353,25 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `GEqualizer-Setup-3.0.0.exe` | ~31 MB | Windows — all-in-one NSIS installer, downloads + installs EqualizerAPO, installs G Equalizer, prompts reboot |
-| `app/GamingEqualizer.exe` | ~100 MB | Windows — raw self-contained EXE (uncompressed, Avalonia) |
+| `G-EQ-Setup-3.0.3.exe` | 31.4 MB | **Current.** Windows — all-in-one NSIS installer. Built 2026-08-15 from `1fdbc0e`; exe reports `3.0.3+2e6f22b`. Its uninstaller deletes the logon task; earlier ones do not. |
+| `G-EQ-Setup-3.0.2.exe` / `3.0.1` / `3.0.0` | ~31 MB each | Superseded. **Do not delete 3.0.0** — the website's macOS/Linux cards point at the v3.0.0 release assets. |
+| `app/` | — | Publish staging dir, **gitignored**. Recreated by the publish command below. |
 | `GEqualizer-macOS-arm64-3.0.0.zip` | ~41 MB | macOS Apple Silicon — `.app` bundle (zip). Unzip, right-click → Open to bypass Gatekeeper. `.icns` icon and `.dmg` need to be generated on macOS. |
 | `GEqualizer-macOS-x64-3.0.0.zip` | ~43 MB | macOS Intel — same as above |
 | `GEqualizer-linux-x64-3.0.0.tar.gz` | ~40 MB | Linux x64 — tar.gz. Extract and run `./GEqualizer-linux/GamingEqualizer`. `.AppImage` packaging needs Linux tools. |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
+
+**macOS and Linux are now four releases behind** (3.0.0 vs 3.0.3), still pre-rebrand, still never
+run on real hardware. Of this cycle's fixes, the `--minimized` initialisation fix and the UI fixes
+(clickable captions, hotkey rebinding, the hint text) are cross-platform and apply to them; the
+scheduled-task autostart is Windows-only — `StartupTask` is guarded by `OperatingSystem.IsWindows()`
+and the settings row is hidden elsewhere, so those platforms have no autostart at all.
+
+**Two staging steps are easy to miss** and both bit this release: the publish output does **not**
+contain `app-icon.ico` (it is an `AvaloniaResource`, embedded in the exe), so it must be copied in
+or `makensis` fails on the installer icon; and a `net10.0` publish emits ~100 MB of `.pdb` files
+into `dist/app/`, which never reach the installer only because `installer.nsi` uses
+`File /r /x "*.pdb"`.
 
 **Publish command** (run from `GamingEqualizer/`):
 ```
@@ -353,8 +392,9 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **The reboot path is still untested** — tick the box, restart, confirm the tray icon appears and hotkeys respond | **Open**, and the only thing left on this branch |
-| **The branch is unmerged, and no artifact contains any of it** — the installed 3.0.2 and all four dist artifacts predate every fix here | **Open.** Needs a republish + installer rebuild; also still missing the PUBG preset |
+| **The reboot path is untested on the shipped build** — restart, then probe `Ctrl+Q` (TAKEN ⇒ initialisation ran) | **Open**, and the last item on this work |
+| **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
+| Windows artifact predated every fix in this cycle | Fixed — `G-EQ-Setup-3.0.3.exe` built from `1fdbc0e` and installed |
 | "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed (`fca165a`), verified: tick creates the task, untick deletes it |
 | `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed (`2eed91c`), verified via `EnumWindows` (hidden window exists) and hotkey probing (both bindings held) |
 | Hotkey rebinding never worked — capture ran with the app's own hotkeys still registered, so they swallowed the keystrokes | Fixed (`06d09af`), verified: rebound to Ctrl+Q/Ctrl+E, both registered, old Ctrl+Alt+E released |
