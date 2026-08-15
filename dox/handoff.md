@@ -1,43 +1,100 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-07)
+## ⏭️ Start here (2026-08-15)
 
-**v3.0.2 is released, pushed, and live.** Everything that was blocked on 2026-08-06 is closed:
-the 0-byte install was repaired (an interrupted extraction, **not** an installer bug — the rebuild
-installed cleanly), the stalled Pages deploy ran once GitHub recovered from its outage, and
-EqualizerAPO was re-attached to the playback device.
+**The dev machine is fresh and cannot build the project.** Only .NET SDK `8.0.204` is installed
+(runtimes top out at 8.0.4) while the project targets `net10.0`, so every build dies on
+`NETSDK1045`. The NuGet cache is completely empty — no Avalonia, no NAudio — so even a temporary
+net8.0 retarget would mean pulling the whole package set. **Installing the .NET 10 SDK is the
+first thing any build/publish session needs to do.** G-EQ was also not installed and EqualizerAPO
+was not present at all (not merely detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on
+2026-08-13; the machine rebooted 2026-08-14 08:17, so the APO has had a boot to load.
 
-**Open, roughly in priority order:**
+**"Launch with Windows" has never worked. Three faults stack up; the decisive one is unfixed.**
+Two are fixed on branch `fix/launch-with-windows-init` (`2eed91c`, pushed, **not merged, never
+compiled**). Do not assume the feature works once that branch lands — fault 1 still blocks it.
 
-1. **Nobody has confirmed the EQ is actually audible.** EqualizerAPO was re-attached at ~15:40 on
-   2026-08-07 but the machine last booted at 11:00, so the APO may not have loaded into the audio
-   pipeline yet. Registry state is correct (both CLSIDs on endpoint `{042e9d92…}`, device back in
-   EqualizerAPO's Child APOs). **Ask the user to confirm by ear** — this has never been verified
-   end to end in a session, and it cannot be: see the verification note below.
-2. **The user's installed copy predates the backdrop fix.** They installed 3.0.2 before
-   `af53aa8` toned the backdrop down, and the installer was rebuilt afterwards. Re-running
-   `dist/G-EQ-Setup-3.0.2.exe` brings the installed copy in line. Purely cosmetic.
-3. **Comparison videos still owed** — see the Website section.
-4. **macOS/Linux are stranded on 3.0.0** — three releases behind, still pre-rebrand, still
+1. **`requireAdministrator` blocks autostart outright — OPEN, no fix written.** Windows silently
+   skips `HKCU\…\Run` entries whose target requires elevation: UAC does not prompt at logon, the
+   app just never starts, and nothing is logged anywhere. `app.manifest` ships
+   `requireAdministrator`, so the Run value the checkbox writes (`MainWindow.axaml.cs:711`) can
+   never fire. **The fix is a scheduled task, not a Run key** — an "At log on" trigger with *Run
+   with highest privileges*, created when the box is ticked and deleted when unticked;
+   `IsStartupRegistered()` (`MainWindow.axaml.cs:689`) must then read the task instead of the
+   registry.
+2. **The `--minimized` path skipped all initialisation — fixed on the branch.** `App.axaml.cs`
+   never called `Show()` for a `--minimized` start, but `MainWindow.OnOpened` is where the
+   sliders, `RestoreState()`, hotkey registration, the auto-preset timer and the APO health check
+   are wired, and it only fires on the first `Show()`. An autostarted G-EQ came up as a bare tray
+   icon: no preset applied, dead hotkeys, no per-game switching, springing to life only when the
+   tray icon was clicked. Now shown minimised then immediately hidden.
+3. **The first-run wizard never ran on any install — fixed on the branch.** `Opened` fires
+   *during* `Show()`, and the handler was attached after it, so it was dead on arrival.
+   `HasCompletedOnboarding` is assigned in that handler alone and is still `false` on this
+   months-old profile, which is the proof. Now attached before `Show()`, deferred through
+   `Dispatcher.UIThread.InvokeAsync` so `Show()` finishes before a modal parents to the window,
+   and still flag-guarded because `Opened` re-fires on every tray restore. **Expect the wizard to
+   appear once** on the next normal launch of a build from that branch.
+
+**Unconfirmed and worth one minute:** nobody has ever observed the checkbox's registry write
+succeed. As of 2026-08-15 there is no `GamingEqualizer` value in `HKCU\…\Run`, nothing in
+`Explorer\StartupApproved\Run` (Windows creates an entry there once a Run value has existed), and
+`AppSettings.json` reads `"LaunchWithWindows": false`. So it is unknown whether the handler writes
+correctly and Windows ignores it, or the write itself fails. **Ask the user to tick the box, then
+read the key.** Note `danil` *is* a local administrator, so the elevated app's
+`Registry.CurrentUser` resolves to the same hive — elevation is not the explanation for the
+missing value.
+
+**Carried over, roughly in priority order:**
+
+1. **Nobody has confirmed the EQ is actually audible.** Still true, and now with a fresh
+   EqualizerAPO install behind it — attachment to the playback device was **not** re-verified on
+   2026-08-15. `config.txt` currently holds only `Preamp: 0 dB` because `EqEnabled` is `false`.
+   **Ask the user to confirm by ear**; it cannot be verified from inside a session.
+2. **Comparison videos still owed** — see the Website section.
+3. **macOS/Linux are stranded on 3.0.0** — three releases behind, still pre-rebrand, still
    unverified on real hardware. The website deliberately points those two cards at the v3.0.0
    assets, which is why **v3.0.0 must not be deleted**.
-5. **Microphone EQ** — discussed, deliberately deferred. See "Microphone EQ" below; it carries a
+4. **Microphone EQ** — discussed, deliberately deferred. See "Microphone EQ" below; it carries a
    real bug worth fixing regardless.
 
-**If EqualizerAPO comes untied again:** it happened once this session — the device vanished from
+**If EqualizerAPO comes untied again:** it happened once on 2026-08-07 — the device vanished from
 both the endpoint's `FxProperties` and EqualizerAPO's Child APOs, which is what unticking it in
 the Configurator does. The install itself was verified healthy (DLL, config, registry, both COM
 classes), so **reinstalling EqualizerAPO is the wrong move** — re-tick the device in
 `Configurator.exe` → *Playback devices* and reboot. If it detaches repeatedly, look for something
 re-enumerating the headset (SteelSeries GG, Windows Update) rather than blaming the install.
 
+*Distinguish that from a genuinely absent install:* on 2026-08-13 `HKLM\SOFTWARE\EqualizerAPO` did
+not exist at all, so reinstalling **was** correct there. The app already tells the two apart in
+`CheckEqBackendHealth()` — no install at all fails `_backend.IsAvailable`
+(`WindowsEQBackend` → `EQConfigWriter.IsEqualizerApoInstalled()`) and shows the "EqualizerAPO
+missing" banner, whereas installed-but-detached reaches `EqApoStatus.NotAttached` and shows the
+Configurator/reboot banner. **Read which banner is up before deciding to reinstall.**
+
 **Cannot be verified from inside a session:** the app ships `requireAdministrator`, so Windows
 UIPI silently blocks synthesised mouse/keyboard input to its window. Hotkeys, banners, colours and
 any UI behaviour must be confirmed by the user by hand — injected keystrokes look like they
-succeed and do nothing. There is also no tool here that can screenshot a native Win32 window, so
-**anything visual is unverifiable without asking**. Two visual bugs shipped this session because of
-that (the backdrop was far too heavy; its geometry was clipped rather than scaled) — when changing
-visuals, say plainly that it needs eyeballing rather than implying it was checked.
+succeed and do nothing. Two visual bugs shipped on 2026-08-07 because of that (the backdrop was far
+too heavy; its geometry was clipped rather than scaled) — when changing visuals, say plainly that
+it needs eyeballing rather than implying it was checked.
+
+**Correction (2026-08-15): the window *can* be screenshotted.** The earlier claim that no tool here
+could capture a native Win32 window is wrong. This works, and was used to confirm the app renders:
+
+```powershell
+Add-Type -AssemblyName System.Drawing          # + P/Invoke GetWindowRect, SetProcessDPIAware
+[void][W]::SetProcessDPIAware()                # MUST come first, or you capture a clipped
+[void][W]::GetWindowRect($h, [ref]$r)          # top-left corner at the wrong scale on this 4K display
+$bmp = New-Object System.Drawing.Bitmap($w, $ht)
+[System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($r.L, $r.T, 0, 0, $bmp.Size)
+```
+
+Caveats: it copies a *screen region*, so the window must be on-screen and unobscured — and it
+cannot be raised first, because UIPI blocks `SetForegroundWindow` against the elevated window and a
+fullscreen game will snatch focus straight back (a capture attempt on 2026-08-15 returned PUBG
+instead of G-EQ). Ask the user to bring the window forward, then capture. Reading pixels is
+possible; *driving* the UI still is not.
 
 **Rebuild ritual:** closing the app window only **hides it to the tray**, so `dotnet build` fails
 with a file lock on `bin\Debug\net10.0\GamingEqualizer.exe`. Ask the user to quit from the **tray
@@ -252,11 +309,24 @@ Then rebuild installer from `dist/`:
 
 ## Known Issues / Things to Fix
 
-None. All previously known issues are resolved.
+**Open (found 2026-08-15, see "Start here" for detail):**
+
+| Issue | State |
+|---|---|
+| **"Launch with Windows" cannot work at all** — Windows silently skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | **Open.** Needs replacing with a scheduled task ("At log on" + *Run with highest privileges*); `IsStartupRegistered()` must read that instead |
+| Whether the checkbox's registry write even succeeds | **Unknown.** No `GamingEqualizer` value has ever been observed in `HKCU\…\Run`. Ask the user to tick the box, then read the key |
+| `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed on `fix/launch-with-windows-init` (`2eed91c`), **unmerged and never compiled** |
+| First-run wizard never fired on any install: `Opened` handler attached after `Show()`, which is when `Opened` fires | Fixed on the same branch, same caveat. Expect the wizard once on the next normal launch |
+
+Note the first row is a consequence of the `requireAdministrator` decision in the table below —
+the two are in direct tension, and picking elevation means autostart has to go through Task
+Scheduler.
+
+**Resolved:**
 
 | Was | Resolution |
 |---|---|
-| `app.manifest` was `asInvoker` | Now `requireAdministrator` in release build |
+| `app.manifest` was `asInvoker` | Now `requireAdministrator` in release build — but see the open issue above: this is what breaks Run-key autostart |
 | Tray icons were placeholders | Replaced with custom shield design matching app palette |
 | `Icon="Assets/app-icon.ico"` crashed on .NET 10 | Set programmatically via `BitmapFrame.Create(pack://...)` in `MainWindow` constructor |
 | White Windows titlebar on all windows | Fixed via `DwmSetWindowAttribute(DWMWA_CAPTION_COLOR)` in `DwmHelper.ApplyDarkTitlebar()` — applied to all windows |
