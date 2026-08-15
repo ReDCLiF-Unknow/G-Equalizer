@@ -10,18 +10,24 @@ first thing any build/publish session needs to do.** G-EQ was also not installed
 was not present at all (not merely detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on
 2026-08-13; the machine rebooted 2026-08-14 08:17, so the APO has had a boot to load.
 
-**"Launch with Windows" has never worked. Three faults stack up; the decisive one is unfixed.**
-Two are fixed on branch `fix/launch-with-windows-init` (`2eed91c`, pushed, **not merged, never
-compiled**). Do not assume the feature works once that branch lands — fault 1 still blocks it.
+**"Launch with Windows" has never worked. Three faults stacked up; all three now have fixes on
+branch `fix/launch-with-windows-init` (`2eed91c`, `fca165a`) — pushed, **not merged, never
+compiled as a whole**. The end-to-end path (tick the box → reboot → tray icon appears) has never
+been run. **That is the one thing to test first.**
 
-1. **`requireAdministrator` blocks autostart outright — OPEN, no fix written.** Windows silently
-   skips `HKCU\…\Run` entries whose target requires elevation: UAC does not prompt at logon, the
-   app just never starts, and nothing is logged anywhere. `app.manifest` ships
-   `requireAdministrator`, so the Run value the checkbox writes (`MainWindow.axaml.cs:711`) can
-   never fire. **The fix is a scheduled task, not a Run key** — an "At log on" trigger with *Run
-   with highest privileges*, created when the box is ticked and deleted when unticked;
-   `IsStartupRegistered()` (`MainWindow.axaml.cs:689`) must then read the task instead of the
-   registry.
+1. **`requireAdministrator` blocked autostart outright — fixed by replacing the Run key with a
+   logon task.** Windows silently skips `HKCU\…\Run` entries whose target requires elevation: UAC
+   does not prompt at logon, the app just never starts, and nothing is logged anywhere. Since
+   `app.manifest` ships `requireAdministrator`, the Run value the checkbox wrote could never fire
+   — the feature was dead on arrival regardless of the other two faults.
+   `Platform/StartupTask.cs` now registers a logon-triggered task through
+   `schtasks /Create /XML`. **The XML form is deliberate:** the `schtasks` CLI defaults
+   `ExecutionTimeLimit` to `P3D` (which would kill a tray app after three days) and both battery
+   settings to true (which would stop it starting on a laptop); only the XML reaches those.
+   `HighestAvailable` starts the elevated app without a prompt, `InteractiveToken` avoids storing
+   a password, and a `PT10S` delay stops the APO health check querying the audio endpoint before
+   it is enumerated. Stale Run values are cleaned up whenever the setting is touched, and the
+   NSIS uninstaller deletes the task.
 2. **The `--minimized` path skipped all initialisation — fixed on the branch.** `App.axaml.cs`
    never called `Show()` for a `--minimized` start, but `MainWindow.OnOpened` is where the
    sliders, `RestoreState()`, hotkey registration, the auto-preset timer and the APO health check
@@ -36,14 +42,23 @@ compiled**). Do not assume the feature works once that branch lands — fault 1 
    and still flag-guarded because `Opened` re-fires on every tray restore. **Expect the wizard to
    appear once** on the next normal launch of a build from that branch.
 
-**Unconfirmed and worth one minute:** nobody has ever observed the checkbox's registry write
-succeed. As of 2026-08-15 there is no `GamingEqualizer` value in `HKCU\…\Run`, nothing in
-`Explorer\StartupApproved\Run` (Windows creates an entry there once a Run value has existed), and
-`AppSettings.json` reads `"LaunchWithWindows": false`. So it is unknown whether the handler writes
-correctly and Windows ignores it, or the write itself fails. **Ask the user to tick the box, then
-read the key.** Note `danil` *is* a local administrator, so the elevated app's
-`Registry.CurrentUser` resolves to the same hive — elevation is not the explanation for the
-missing value.
+**How far the fix was verified, and where it stops.** `StartupTask.cs` compiles clean against the
+net8.0 reference assemblies with `nullable:enable`, and the XML it emits was handed to the Task
+Scheduler COM parser (`Schedule.Service` → `NewTask(0).XmlText = …`, which validates without
+registering anything). It was accepted, and read back as `RunLevel=1` (HIGHEST), `LogonType=3`
+(InteractiveToken), trigger type 9 (LOGON) with `PT10S` delay, `--minimized`, `ExecutionTimeLimit=
+PT0S`, both battery settings false. **That validates the XML, not the feature.** Nothing has been
+built, no task has ever been registered, and no reboot has been tested. That COM round-trip is a
+cheap way to re-check the XML after any edit — use it.
+
+**Still unknown:** whether the checkbox handler was ever reached at all. As of 2026-08-15 there was
+no `GamingEqualizer` value in `HKCU\…\Run`, nothing in `Explorer\StartupApproved\Run` (Windows
+creates an entry there once a Run value has existed), and `AppSettings.json` read
+`"LaunchWithWindows": false` — so it was never established whether the old code wrote correctly and
+Windows ignored it, or the write itself failed. Mostly moot now the Run key is gone, but if the
+task also fails to appear after ticking the box, suspect the handler rather than `schtasks`. Note
+`danil` *is* a local administrator, so the elevated app's `Registry.CurrentUser` resolved to the
+same hive — elevation was never the explanation for the missing value.
 
 **Carried over, roughly in priority order:**
 
@@ -313,14 +328,15 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **"Launch with Windows" cannot work at all** — Windows silently skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | **Open.** Needs replacing with a scheduled task ("At log on" + *Run with highest privileges*); `IsStartupRegistered()` must read that instead |
-| Whether the checkbox's registry write even succeeds | **Unknown.** No `GamingEqualizer` value has ever been observed in `HKCU\…\Run`. Ask the user to tick the box, then read the key |
-| `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed on `fix/launch-with-windows-init` (`2eed91c`), **unmerged and never compiled** |
-| First-run wizard never fired on any install: `Opened` handler attached after `Show()`, which is when `Opened` fires | Fixed on the same branch, same caveat. Expect the wizard once on the next normal launch |
+| **Nothing on `fix/launch-with-windows-init` has ever been compiled or run** — three fixes, all unverified end to end | **Open.** Needs the .NET 10 SDK, a build, then: tick the box, reboot, confirm the tray icon appears and hotkeys respond |
+| "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed on that branch (`fca165a`) by moving to a logon-triggered scheduled task with *HighestAvailable* |
+| `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed on that branch (`2eed91c`) |
+| First-run wizard never fired on any install: `Opened` handler attached after `Show()`, which is when `Opened` fires | Fixed on that branch (`2eed91c`). Expect the wizard once on the next normal launch |
 
-Note the first row is a consequence of the `requireAdministrator` decision in the table below —
-the two are in direct tension, and picking elevation means autostart has to go through Task
-Scheduler.
+The autostart row is a direct consequence of the `requireAdministrator` decision in the table
+below — the two are in tension, and choosing elevation is what forces autostart through Task
+Scheduler. If elevation is ever dropped, a plain Run value would work again and
+`Platform/StartupTask.cs` could go.
 
 **Resolved:**
 
