@@ -4,7 +4,6 @@ using System.Runtime.Versioning;
 using Avalonia.Input.Platform;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
-using Microsoft.Win32;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -649,9 +648,6 @@ public partial class MainWindow : Window
 
     // ── Settings panel ───────────────────────────────────────────────────────
 
-    private const string RunKey  = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "GamingEqualizer";
-
     private void PopulateSettingsPanel()
     {
         // Hide launch-with-windows on non-Windows
@@ -686,16 +682,7 @@ public partial class MainWindow : Window
         _suppressSettings = false;
     }
 
-    private static bool IsStartupRegistered()
-    {
-        if (!OperatingSystem.IsWindows()) return false;
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(AppName) != null;
-        }
-        catch { return false; }
-    }
+    private static bool IsStartupRegistered() => StartupTask.IsRegistered();
 
     private void LaunchWithWindows_Changed(object? sender, RoutedEventArgs e)
     {
@@ -703,23 +690,18 @@ public partial class MainWindow : Window
         bool enable = LaunchWithWindowsCheck.IsChecked == true;
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-            if (key == null) return;
-            if (enable)
-            {
-                var exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule!.FileName;
-                key.SetValue(AppName, $"\"{exePath}\" --minimized");
-            }
-            else
-            {
-                key.DeleteValue(AppName, throwOnMissingValue: false);
-            }
+            if (enable) StartupTask.Register();
+            else        StartupTask.Unregister();
+
             _settings.LaunchWithWindows = enable;
             _settings.Save();
         }
         catch (Exception ex)
         {
-            Logger.Log($"Failed to update startup registry: {ex.Message}");
+            // This used to fail silently into the log, which is part of why the feature was
+            // broken for so long without anyone noticing. Put it on screen.
+            Logger.Log($"Failed to update the logon task: {ex.Message}");
+            ShowErrorBanner($"Could not change \"Launch with Windows\": {ex.Message}");
             _suppressSettings = true;
             LaunchWithWindowsCheck.IsChecked = !enable;
             _suppressSettings = false;

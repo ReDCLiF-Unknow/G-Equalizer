@@ -157,6 +157,10 @@ FunctionEnd
 
 Section "Uninstall"
 
+    ; "Launch with Windows" is a scheduled task from 3.0.3 on (a Run value could never fire —
+    ; the app is requireAdministrator and Windows skips elevated Run entries at logon).
+    ; Remove both, or an uninstall leaves a logon task pointing at a deleted exe.
+    nsExec::Exec 'schtasks /Delete /TN "GamingEqualizer" /F'
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "GamingEqualizer"
 
     RMDir /r "$INSTDIR"
