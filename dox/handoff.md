@@ -2,18 +2,33 @@
 
 ## ⏭️ Start here (2026-08-15)
 
-**The dev machine is fresh and cannot build the project.** Only .NET SDK `8.0.204` is installed
-(runtimes top out at 8.0.4) while the project targets `net10.0`, so every build dies on
-`NETSDK1045`. The NuGet cache is completely empty — no Avalonia, no NAudio — so even a temporary
-net8.0 retarget would mean pulling the whole package set. **Installing the .NET 10 SDK is the
-first thing any build/publish session needs to do.** G-EQ was also not installed and EqualizerAPO
-was not present at all (not merely detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on
-2026-08-13; the machine rebooted 2026-08-14 08:17, so the APO has had a boot to load.
+**The build works again.** SDK `10.0.400` was installed on 2026-08-15 via
+`winget install --id Microsoft.DotNet.SDK.10`; before that the box had only `8.0.204` against a
+`net10.0` project and every build died on `NETSDK1045`. `dotnet build` is clean (0 errors; the 3
+`AVLN3001` XAML warnings on CalibrationWizard/MiniWindow/SavePresetDialog are long-standing and
+unrelated). G-EQ was also not installed and EqualizerAPO was not present at all (not merely
+detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on 2026-08-13.
 
-**"Launch with Windows" has never worked. Three faults stacked up; all three now have fixes on
-branch `fix/launch-with-windows-init` (`2eed91c`, `fca165a`) — pushed, **not merged, never
-compiled as a whole**. The end-to-end path (tick the box → reboot → tray icon appears) has never
-been run. **That is the one thing to test first.**
+**Build lock:** once the app has been launched from `bin\Debug`, closing its window only hides it
+to the tray and the next build fails on a file lock. Quit from the **tray icon**; `taskkill` needs
+elevation. To check that code merely compiles while it runs, build to a throwaway `-o` directory.
+
+**"Launch with Windows" now works, verified through the app's own code path.** Branch
+`fix/launch-with-windows-init` — pushed, **not merged**. On 2026-08-15, against a real build:
+opening Settings with a task present showed the box ticked (`IsRegistered()` reads correctly),
+unticking deleted the task, ticking recreated it, and the app-generated XML registered as
+`RunLevel=HIGHEST`, `LogonType=InteractiveToken`, logon trigger `PT10S`, `--minimized`,
+`ExecutionTimeLimit=PT0S`, both battery settings false. **The only unverified step left is the
+reboot itself** — restart and confirm the tray icon appears and the hotkeys respond.
+
+**A caution about the diagnosis, because it cost an hour.** Several rounds were spent chasing a
+phantom fourth bug: the box appeared to tick while `LaunchWithWindows` stayed `false`, no task
+appeared, and nothing was logged. There was no bug. The `SETTINGS` heading is fixed while the list
+beneath it scrolls, so a scrolled panel looks like the top, and the control being clicked was a
+different checkbox further down — which is exactly why settings kept saving while
+`LaunchWithWindows` never moved. **When a settings control seems inert, first confirm which row is
+actually on screen.** The "Launch with Windows" row is the first item, directly above
+`Default preset:`.
 
 1. **`requireAdministrator` blocked autostart outright — fixed by replacing the Run key with a
    logon task.** Windows silently skips `HKCU\…\Run` entries whose target requires elevation: UAC
@@ -42,23 +57,33 @@ been run. **That is the one thing to test first.**
    and still flag-guarded because `Opened` re-fires on every tray restore. **Expect the wizard to
    appear once** on the next normal launch of a build from that branch.
 
-**How far the fix was verified, and where it stops.** `StartupTask.cs` compiles clean against the
-net8.0 reference assemblies with `nullable:enable`, and the XML it emits was handed to the Task
-Scheduler COM parser (`Schedule.Service` → `NewTask(0).XmlText = …`, which validates without
-registering anything). It was accepted, and read back as `RunLevel=1` (HIGHEST), `LogonType=3`
-(InteractiveToken), trigger type 9 (LOGON) with `PT10S` delay, `--minimized`, `ExecutionTimeLimit=
-PT0S`, both battery settings false. **That validates the XML, not the feature.** Nothing has been
-built, no task has ever been registered, and no reboot has been tested. That COM round-trip is a
-cheap way to re-check the XML after any edit — use it.
+**Three more UI faults were found while trying to test the above** (`06d09af`), each of which was
+independently making the app feel broken:
 
-**Still unknown:** whether the checkbox handler was ever reached at all. As of 2026-08-15 there was
-no `GamingEqualizer` value in `HKCU\…\Run`, nothing in `Explorer\StartupApproved\Run` (Windows
-creates an entry there once a Run value has existed), and `AppSettings.json` read
-`"LaunchWithWindows": false` — so it was never established whether the old code wrote correctly and
-Windows ignored it, or the write itself failed. Mostly moot now the Run key is gone, but if the
-task also fails to appear after ticking the box, suspect the handler rather than `schtasks`. Note
-`danil` *is* a local administrator, so the elevated app's `Registry.CurrentUser` resolved to the
-same hive — elevation was never the explanation for the missing value.
+- **Hotkey rebinding never worked at all.** `CaptureHotkey_Click` armed capture mode while the
+  app's own hotkeys were still registered, and a registered combination goes to its owner as
+  `WM_HOTKEY` without ever reaching the focused window as key input — so the combinations a user
+  is most likely to press while rebinding (the current ones) could not be captured. Pressing
+  Ctrl+Alt+E to rebind the toggle just toggled the EQ. Registration is now released for the
+  duration of the capture and restored on every exit path.
+- **None of the three settings checkbox captions were clickable** — caption as a sibling
+  `TextBlock` left only the ~16px box as a hit target. Now the `CheckBox`'s `Content`.
+- **The "EQ is switched off" hint hardcoded `Ctrl+Alt+E`**, so after any rebind it pointed at a
+  combination that did nothing. Reads `_settings.HotkeyToggle` now.
+
+**Useful techniques from this session, all read-only:**
+
+- **Validate task XML without registering anything:** `Schedule.Service` → `NewTask(0).XmlText = …`
+  parses against the real schema and throws on violations. Cheap to re-run after any edit to
+  `BuildTaskXml`. (Element order inside `<Settings>` turned out not to matter — Task Scheduler
+  accepted an order that differs from what it emits itself.)
+- **Prove a global hotkey is actually held:** `RegisterHotKey` is exclusive, so attempting to
+  register the same combination from a probe process returns error `1409` when the app owns it.
+  Always probe an unused combination too, to confirm the test discriminates.
+- **Prove `OnOpened` ran on a `--minimized` start:** `EnumWindows` lists invisible top-level
+  windows, so a hidden `G-EQ` window means `Show()` was called. Before the fix no window existed.
+- **Creating the task needs elevation** (`schtasks /Create` with `HighestAvailable` returns "Access
+  is denied" from a medium-integrity shell). The app has it; a helper shell does not.
 
 **Carried over, roughly in priority order:**
 
@@ -328,10 +353,14 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **Nothing on `fix/launch-with-windows-init` has ever been compiled or run** — three fixes, all unverified end to end | **Open.** Needs the .NET 10 SDK, a build, then: tick the box, reboot, confirm the tray icon appears and hotkeys respond |
-| "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed on that branch (`fca165a`) by moving to a logon-triggered scheduled task with *HighestAvailable* |
-| `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed on that branch (`2eed91c`) |
-| First-run wizard never fired on any install: `Opened` handler attached after `Show()`, which is when `Opened` fires | Fixed on that branch (`2eed91c`). Expect the wizard once on the next normal launch |
+| **The reboot path is still untested** — tick the box, restart, confirm the tray icon appears and hotkeys respond | **Open**, and the only thing left on this branch |
+| **The branch is unmerged, and no artifact contains any of it** — the installed 3.0.2 and all four dist artifacts predate every fix here | **Open.** Needs a republish + installer rebuild; also still missing the PUBG preset |
+| "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed (`fca165a`), verified: tick creates the task, untick deletes it |
+| `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed (`2eed91c`), verified via `EnumWindows` (hidden window exists) and hotkey probing (both bindings held) |
+| Hotkey rebinding never worked — capture ran with the app's own hotkeys still registered, so they swallowed the keystrokes | Fixed (`06d09af`), verified: rebound to Ctrl+Q/Ctrl+E, both registered, old Ctrl+Alt+E released |
+| All three settings checkbox captions were dead to clicks | Fixed (`06d09af`), verified |
+| "EQ is switched off" hint hardcoded `Ctrl+Alt+E` regardless of the real binding | Fixed (`06d09af`) |
+| First-run wizard never fired on any install: `Opened` handler attached after `Show()`, which is when `Opened` fires | Fixed (`2eed91c`). **Not yet observed firing** — expect it once on the next normal launch |
 
 The autostart row is a direct consequence of the `requireAdministrator` decision in the table
 below — the two are in tension, and choosing elevation is what forces autostart through Task
