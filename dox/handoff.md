@@ -13,7 +13,15 @@ detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on 2026-08-13.
 to the tray and the next build fails on a file lock. Quit from the **tray icon**; `taskkill` needs
 elevation. To check that code merely compiles while it runs, build to a throwaway `-o` directory.
 
-**v3.0.3 is built, committed to `main` (`1fdbc0e`) and installed.** `fix/launch-with-windows-init`
+**Unreleased work sits on `main` ahead of 3.0.3.** `06ada69` fixes three things the autostart work
+made more likely, none of which are in any shipped build: uninstalling no longer leaves the EQ
+applied forever (the uninstaller now writes a flat `Preamp: 0 dB`, since EqualizerAPO keeps
+applying `config.txt` whether or not G-EQ exists); a named per-session mutex stops a second
+instance, which used to leave the newer copy silently holding no hotkeys while both wrote the APO
+config; and the Settings panel resets its scroll offset. **A 3.0.4 build and release is the next
+step** — until then the published installer has none of it.
+
+**v3.0.3 is built, committed to `main` (`1fdbc0e`), installed, released and live on the website.** `fix/launch-with-windows-init`
 was merged (fast-forward) and shipped. "Launch with Windows" works, verified through the app's own
 code path: opening Settings with a task present shows the box ticked (`IsRegistered()` reads
 correctly), unticking deletes the task, ticking recreates it. On the installed 3.0.3 the task
@@ -397,9 +405,16 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **3.0.3 is not published** — no git tag, no GitHub Release, no uploaded asset; the website still advertises 3.0.2 | **Open.** The built installer is committed at `dist/G-EQ-Setup-3.0.3.exe` |
+| **Three fixes are committed but unreleased** (`06ada69`) — uninstall unbypass, single instance, settings scroll reset. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
-| Windows artifact predated every fix in this cycle | Fixed — `G-EQ-Setup-3.0.3.exe` built from `1fdbc0e`, installed, reboot-verified |
+| **Node 20.9.0 cannot build the website** (Astro needs ≥22.12.0) — no dev server, so visual changes ship unverified | **Open.** CI uses Node 22 so deploys are fine; worth fixing before the comparison videos land |
+| `ResetAccent_Click` sets `_suppressSettings` true/false around `RefreshAccentControls()` with no `try`/`finally` | **Open, latent.** A throw there silently deadens the whole Settings panel until restart — the same shape as the bug hardened in `PopulateSettingsPanel` |
+| Auto-preset switching ends in a bare `catch { }`; `BypassAndQuit` swallows a failed bypass; APO health is only checked in `OnOpened` | **Open, minor.** Each fails silently: per-game switching can stop forever, quitting can leave the EQ applied, a mid-session APO detach goes unreported |
+| Uninstalling left the EQ applied forever — the uninstaller never reset EqualizerAPO's `config.txt` | Fixed (`06ada69`), NSIS compiles; **not yet exercised by a real uninstall** |
+| Nothing stopped two instances running — the second silently held no hotkeys and both wrote `config.txt` | Fixed (`06ada69`), verified: two launches leave one process. The surface-a-hidden-window path is **not** yet hands-on tested |
+| Settings panel kept its scroll offset under a fixed heading, making a scrolled list look like the top | Fixed (`06ada69`) |
+| Windows artifact predated every fix in the autostart cycle | Fixed — `G-EQ-Setup-3.0.3.exe` built from `1fdbc0e`, installed, reboot-verified, released and live on the website |
 | Autostart end to end (task fires → app initialises → hotkeys live) | **Verified** on the shipped build, 2026-08-15 |
 | "Launch with Windows" could never work — Windows skips `HKCU\…\Run` entries needing elevation, and `app.manifest` is `requireAdministrator` | Fixed (`fca165a`), verified: tick creates the task, untick deletes it |
 | `--minimized` start skipped `Show()`, so `MainWindow.OnOpened` — and therefore every bit of initialisation — never ran | Fixed (`2eed91c`), verified via `EnumWindows` (hidden window exists) and hotkey probing (both bindings held) |
