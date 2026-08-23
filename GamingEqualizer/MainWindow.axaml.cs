@@ -68,6 +68,30 @@ public partial class MainWindow : Window
     private bool                   _liveMode;
     private AudioSpectrumAnalyzer? _spectrum;
 
+    // Beat mode: pulse the bars in time with the music instead of tracing the spectrum.
+    // Both modes read the same capture, so they share the analyzer and are mutually exclusive.
+    private bool _beatMode;
+
+    /// <summary>True when the bars are driven by audio rather than by the EQ curve.</summary>
+    private bool AudioDriven => _liveMode || _beatMode;
+
+    // Onset detection over the kick-drum band. Bars are ~85 ms apart (4096 samples at 48 kHz),
+    // so a beat lands within about a frame of the real one — fine for a visual pulse.
+    private const int    BeatHistoryFrames = 18;     // ~1.5 s of context
+    private const int    BeatBassBars      = 16;     // bars 0-15 ≈ 20-80 Hz
+    private const double BeatThreshold     = 1.25;   // energy must exceed this × the local average
+    private const double BeatFloor         = 0.6;    // ignore near-silence
+    private const double BeatRefractoryMs  = 200;    // caps at ~300 BPM, stops double triggers
+    private const double BeatRise          = 1.15;   // must be climbing, not merely loud
+    private const double BeatDecayPerTick  = 0.90;   // pulse falls away over roughly 400 ms
+
+    private readonly double[] _beatHistory = new double[BeatHistoryFrames];
+    private int               _beatHistoryCount;
+    private int               _beatHistoryPos;
+    private double            _beatPrevEnergy;
+    private DateTime          _lastBeatAt = DateTime.MinValue;
+    private double            _beatPulse;   // 0-1, set on a beat and decayed every tick
+
     // Status dot pulse
     private DispatcherTimer? _pulseTimer;
     private bool             _pulseHigh = true;
@@ -985,6 +1009,9 @@ public partial class MainWindow : Window
     private void LiveModeButton_Click(object? sender, RoutedEventArgs e)
         => ToggleLiveMode((Button)sender!);
 
+    private void BeatModeButton_Click(object? sender, RoutedEventArgs e)
+        => ToggleBeatMode((Button)sender!);
+
     private void CalibrationButton_Click(object? sender, RoutedEventArgs e)
         => OpenCalibrationWizard();
 
@@ -1304,8 +1331,23 @@ public partial class MainWindow : Window
 
     private void VizTick(object? sender, EventArgs e)
     {
-        double lerp = _liveMode ? 0.30 : 0.15;
-        double snap = _liveMode ? 0.05 : 0.02;
+        double lerp = AudioDriven ? 0.30 : 0.15;
+        double snap = AudioDriven ? 0.05 : 0.02;
+
+        if (_beatMode)
+        {
+            // Decay between beats so each one reads as a distinct hit rather than a level.
+            _beatPulse *= BeatDecayPerTick;
+
+            for (int i = 0; i < VizBars; i++)
+            {
+                // An arch, tallest in the middle, so a pulse looks like a shape breathing
+                // rather than a solid block switching on and off.
+                double t    = i / (double)(VizBars - 1);
+                double arch = 0.35 + 0.65 * Math.Sin(Math.PI * t);
+                _vizTarget[i] = _beatPulse * arch * 12.0;
+            }
+        }
 
         for (int i = 0; i < VizBars; i++)
         {
@@ -1316,7 +1358,7 @@ public partial class MainWindow : Window
                 _vizCurrent[i] = _vizTarget[i];
         }
 
-        if (!_liveMode) _ripplePhase += 0.06;
+        if (!AudioDriven) _ripplePhase += 0.06;
         PositionVizBars();
     }
 
@@ -1340,7 +1382,7 @@ public partial class MainWindow : Window
             {
                 double gain = _vizCurrent[j];
 
-                if (!_liveMode)
+                if (!AudioDriven)
                 {
                     double pos = j / (double)(VizBars - 1) * 9.0;
                     gain += Math.Sin(pos * 1.4 + _ripplePhase) * 0.35;
@@ -1377,7 +1419,7 @@ public partial class MainWindow : Window
 
     private void SetVizTargets()
     {
-        if (_liveMode) return;
+        if (AudioDriven) return;
 
         for (int j = 0; j < VizBars; j++)
         {
@@ -1922,36 +1964,120 @@ public partial class MainWindow : Window
 
     internal void ToggleLiveMode(Button liveButton)
     {
-        _liveMode = !_liveMode;
+        bool want = !_liveMode;
+        if (want && _beatMode) ToggleBeatMode(BeatModeButton);   // the two are exclusive
 
+        _liveMode = want;
+        if (_liveMode && !StartAnalyzer()) { _liveMode = false; return; }
+
+        liveButton.Content = _liveMode ? "◉ LIVE" : "○ LIVE";
+        liveButton.Theme   = _liveMode ? PrimaryButtonTheme : null; // null = implicit theme
+        if (!_liveMode) StopAnalyzerIfIdle();
+    }
+
+    internal void ToggleBeatMode(Button beatButton)
+    {
+        bool want = !_beatMode;
+        if (want && _liveMode) ToggleLiveMode(LiveModeButton);
+
+        _beatMode = want;
+        if (_beatMode && !StartAnalyzer()) { _beatMode = false; return; }
+
+        beatButton.Content = _beatMode ? "◉ BEAT" : "♪ BEAT";
+        beatButton.Theme   = _beatMode ? PrimaryButtonTheme : null;
+
+        if (_beatMode)
+        {
+            _beatHistoryCount = 0;
+            _beatPrevEnergy   = 0;
+            _beatHistoryPos   = 0;
+            _beatPulse        = 0;
+            _lastBeatAt       = DateTime.MinValue;
+        }
+        else StopAnalyzerIfIdle();
+    }
+
+    /// <summary>Starts the shared capture if it is not already running. False if it failed.</summary>
+    private bool StartAnalyzer()
+    {
+        if (_spectrum != null) return true;
+        try
+        {
+            var spectrum = new AudioSpectrumAnalyzer();
+            spectrum.OnSpectrum = bars => Dispatcher.UIThread.InvokeAsync(() => OnSpectrumFrame(bars));
+            spectrum.Start();
+            _spectrum = spectrum;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Logged as well as shown: the banner is dismissable and used to be the only trace.
+            Logger.Log($"WASAPI loopback capture failed to start: {ex}");
+            ShowErrorBanner("WASAPI audio capture failed. Is a playback device available?");
+            return false;
+        }
+    }
+
+    private void StopAnalyzerIfIdle()
+    {
+        if (AudioDriven) return;
+        _spectrum?.Dispose();
+        _spectrum  = null;
+        _beatPulse = 0;
+        SetVizTargets();
+    }
+
+    private void OnSpectrumFrame(double[] bars)
+    {
         if (_liveMode)
         {
-            try
-            {
-                _spectrum = new AudioSpectrumAnalyzer();
-                _spectrum.OnSpectrum = bars => Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    for (int j = 0; j < VizBars; j++)
-                        _vizTarget[j] = bars[j];
-                });
-                _spectrum.Start();
-                liveButton.Content = "◉ LIVE";
-                liveButton.Theme   = PrimaryButtonTheme;
-            }
-            catch
-            {
-                _liveMode = false;
-                _spectrum = null;
-                ShowErrorBanner("WASAPI audio capture failed. Is a playback device available?");
-            }
+            for (int j = 0; j < VizBars; j++)
+                _vizTarget[j] = bars[j];
+            return;
         }
-        else
+
+        if (_beatMode) DetectBeat(bars);
+    }
+
+    /// <summary>
+    /// Flags a beat when energy in the kick band jumps above its own recent average. Comparing
+    /// against a rolling local average rather than a fixed level is what lets it follow a track
+    /// through quiet and loud passages instead of firing constantly in one and never in the other.
+    /// </summary>
+    private void DetectBeat(double[] bars)
+    {
+        double energy = 0;
+        for (int i = 0; i < BeatBassBars && i < bars.Length; i++) energy += bars[i];
+        energy /= BeatBassBars;
+
+        double average = 0;
+        if (_beatHistoryCount > 0)
         {
-            _spectrum?.Dispose();
-            _spectrum          = null;
-            liveButton.Content = "○ LIVE";
-            liveButton.Theme   = null; // revert to implicit button theme
-            SetVizTargets();
+            for (int i = 0; i < _beatHistoryCount; i++) average += _beatHistory[i];
+            average /= _beatHistoryCount;
         }
+
+        double previous = _beatPrevEnergy;
+        _beatPrevEnergy = energy;
+
+        _beatHistory[_beatHistoryPos] = energy;
+        _beatHistoryPos = (_beatHistoryPos + 1) % BeatHistoryFrames;
+        if (_beatHistoryCount < BeatHistoryFrames) _beatHistoryCount++;
+
+        // Needs a full window before it can judge anything as "louder than usual".
+        if (_beatHistoryCount < BeatHistoryFrames) return;
+        if (energy < BeatFloor || energy < average * BeatThreshold) return;
+
+        // Must also be rising. Without this the rolling average self-oscillates on sustained
+        // sound: a spike lifts the average, the ratio dips under the threshold, the spike ages
+        // out, and it fires again — a steady tone produced a phantom beat roughly twice a
+        // second. A real onset is a jump from the frame before it.
+        if (energy < previous * BeatRise) return;
+
+        if ((DateTime.UtcNow - _lastBeatAt).TotalMilliseconds < BeatRefractoryMs) return;
+
+        _lastBeatAt = DateTime.UtcNow;
+        double strength = Math.Clamp((energy / Math.Max(average, 0.0001) - 1.0) / 1.5, 0.35, 1.0);
+        _beatPulse = Math.Max(_beatPulse, strength);
     }
 }

@@ -89,7 +89,13 @@ public sealed class AudioSpectrumAnalyzer : IDisposable
                 if (mag > peak) peak = mag;
             }
 
-            double dB  = peak > 1e-10 ? 20 * Math.Log10(peak * 2.0 / FftSize) : FloorDb;
+            // NAudio's FFT already scales by 1/N, so dividing by FftSize here as well
+            // normalised twice: a full-scale sine came out at -79 dB, a hair above the floor,
+            // and anything quieter clamped to zero — the bars never moved at any volume.
+            // x2 recovers the half of the energy sitting in the mirrored negative bins, and
+            // another x2 compensates the Hann window's 0.5 coherent gain, putting a full-scale
+            // sine at roughly 0 dBFS.
+            double dB  = peak > 1e-10 ? 20 * Math.Log10(peak * 4.0) : FloorDb;
             dB         = Math.Max(FloorDb, dB);
             bars[j]    = Math.Max(0, (dB - FloorDb) / (-FloorDb) * 12.0);
         }

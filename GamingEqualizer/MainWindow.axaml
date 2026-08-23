@@ -129,7 +129,12 @@
                             <Button x:Name="LiveModeButton"
                                     Content="○ LIVE"
                                     FontSize="10" Padding="7,2"
+                                    Margin="0,0,6,0"
                                     Click="LiveModeButton_Click"/>
+                            <Button x:Name="BeatModeButton"
+                                    Content="♪ BEAT"
+                                    FontSize="10" Padding="7,2"
+                                    Click="BeatModeButton_Click"/>
                         </StackPanel>
                     </Grid>
                     <Canvas x:Name="VisualizerCanvas" Grid.Row="1"
