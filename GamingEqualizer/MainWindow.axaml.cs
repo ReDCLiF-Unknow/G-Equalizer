@@ -609,6 +609,15 @@ public partial class MainWindow : Window
         RefreshTrayTooltip();
     }
 
+    /// <summary>Bring the window back from the tray. Used by the tray icon and by a second
+    /// instance asking us to surface.</summary>
+    internal void RestoreFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
     public void ToggleEqFromTray()
     {
         SetEqState(!_settings.EqEnabled, writeConfig: true);
@@ -656,6 +665,11 @@ public partial class MainWindow : Window
         // Hide launch-with-windows on non-Windows
         if (LaunchWithWindowsPanel != null)
             LaunchWithWindowsPanel.IsVisible = OperatingSystem.IsWindows();
+
+        // The SETTINGS heading is fixed while this list scrolls, so a retained offset makes a
+        // scrolled panel look like the top of it — which is how "Launch with Windows" (the
+        // first row) came to look like a dead control while a different row was being clicked.
+        SettingsScrollViewer.Offset = new Vector(0, 0);
 
         // try/finally matters here: _suppressSettings gates every handler in this panel, so a
         // throw anywhere below would leave it stuck true and silently deaden the entire
@@ -1518,6 +1532,15 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        // A second copy of G-EQ broadcasts this instead of starting up, so clicking the
+        // shortcut while we are already in the tray surfaces this window rather than leaving
+        // a rival instance running that would silently hold none of the global hotkeys.
+        if (msg != 0 && msg == Program.ShowWindowMessage)
+        {
+            Dispatcher.UIThread.InvokeAsync(RestoreFromTray);
+            return IntPtr.Zero;
+        }
+
         if (msg == (uint)HotkeyManager.WM_HOTKEY)
         {
             int id = wParam.ToInt32();

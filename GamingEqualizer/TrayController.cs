@@ -62,12 +62,7 @@ public class TrayController : IDisposable
         _trayIcon.ToolTipText = text.Length > 63 ? text[..63] : text;
     }
 
-    private void ShowWindow()
-    {
-        _mainWindow.Show();
-        _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow.Activate();
-    }
+    private void ShowWindow() => _mainWindow.RestoreFromTray();
 
     public void Dispose()
     {

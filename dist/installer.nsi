@@ -163,6 +163,20 @@ Section "Uninstall"
     nsExec::Exec 'schtasks /Delete /TN "GamingEqualizer" /F'
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "GamingEqualizer"
 
+    ; Hand the audio chain back clean. EqualizerAPO keeps applying whatever config.txt holds,
+    ; with or without G-EQ installed — so uninstalling while the EQ is on would leave the user
+    ; permanently equalised, with nothing left on the machine to explain it or switch it off.
+    ; EqualizerAPO itself is deliberately not uninstalled; the user may be using it separately.
+    ReadRegStr $0 HKLM "${EQAPO_REG}" "ConfigPath"
+    ${If} $0 != ""
+        ClearErrors
+        FileOpen $1 "$0\config.txt" w
+        ${IfNot} ${Errors}
+            FileWrite $1 "Preamp: 0 dB$\r$\n"
+            FileClose $1
+        ${EndIf}
+    ${EndIf}
+
     RMDir /r "$INSTDIR"
 
     Delete "$DESKTOP\${APP_NAME}.lnk"
