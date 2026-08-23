@@ -13,13 +13,33 @@ detached) until `dist/G-EQ-Setup-3.0.2.exe` was run on 2026-08-13.
 to the tray and the next build fails on a file lock. Quit from the **tray icon**; `taskkill` needs
 elevation. To check that code merely compiles while it runs, build to a throwaway `-o` directory.
 
-**Unreleased work sits on `main` ahead of 3.0.3.** `06ada69` fixes three things the autostart work
-made more likely, none of which are in any shipped build: uninstalling no longer leaves the EQ
-applied forever (the uninstaller now writes a flat `Preamp: 0 dB`, since EqualizerAPO keeps
-applying `config.txt` whether or not G-EQ exists); a named per-session mutex stops a second
-instance, which used to leave the newer copy silently holding no hotkeys while both wrote the APO
-config; and the Settings panel resets its scroll offset. **A 3.0.4 build and release is the next
-step** — until then the published installer has none of it.
+**Unreleased work sits on `main` ahead of 3.0.3 — five changes, none in any shipped build.**
+A 3.0.4 build and release is the next step.
+
+- `06ada69` — **uninstalling no longer leaves the EQ applied forever.** The uninstaller now writes
+  a flat `Preamp: 0 dB`, since EqualizerAPO keeps applying `config.txt` whether or not G-EQ
+  exists. Also a named per-session **mutex** stopping a second instance (which used to leave the
+  newer copy silently holding no hotkeys while both wrote the APO config), and the Settings panel
+  **resets its scroll offset**.
+- `3c920ba` — **Bass Boost preset** (`+7 +6 +4 +2 0 0 0 0 +1 +1`). Note it loads *first*
+  alphabetically, so it takes `Ctrl+Alt+1` and shifts the other preset hotkeys down one.
+- `82efc1b` — **the LIVE visualizer never worked, and now does**, plus a new **BEAT** mode.
+
+**The visualizer bug is worth understanding before touching that code.** `AudioSpectrumAnalyzer`
+normalised twice: NAudio's `FastFourierTransform.FFT` already scales by 1/N, and the code divided
+by `FftSize` again. Measured against a synthetic sine, a full-scale tone landed at **-79.4 dB**, a
+hair above the `-80 dB` floor, and amplitude 0.5 at **-85.5 dB**, under the floor and clamped to
+zero — so every bar read `0.000` at any volume and the display sat flat. It is now scaled `x4`
+(x2 for the mirrored negative bins, x2 for the Hann window's 0.5 coherent gain), putting a
+full-scale sine near 0 dBFS. **Loopback capture itself was always fine** — that was verified
+separately and is not where to look if this regresses.
+
+**BEAT mode** pulses the bars on onsets instead of tracing the spectrum: it averages the kick band
+(bars 0-15, ~20-80 Hz) and fires when that jumps above its own rolling 1.5 s average. It requires
+a **rise** over the previous frame as well as excess over the average — without that the rolling
+average self-oscillates on sustained sound (a spike lifts the average, the ratio dips under the
+threshold, the spike ages out, it re-fires), and a steady 440 Hz tone produced a phantom beat
+about twice a second. Both modes share one capture and are mutually exclusive.
 
 **v3.0.3 is built, committed to `main` (`1fdbc0e`), installed, released and live on the website.** `fix/launch-with-windows-init`
 was merged (fast-forward) and shipped. "Launch with Windows" works, verified through the app's own
@@ -105,6 +125,15 @@ independently making the app feel broken:
   windows, so a hidden `G-EQ` window means `Show()` was called. Before the fix no window existed.
 - **Creating the task needs elevation** (`schtasks /Create` with `HighestAvailable` returns "Access
   is denied" from a medium-integrity shell). The app has it; a helper shell does not.
+- **Test the audio path without the UI.** A throwaway console project referencing NAudio, with
+  `<Compile Include="…\AudioSpectrumAnalyzer.cs" />` linked straight from the app, runs the real
+  capture and FFT and prints bar values. That is what exposed the all-zero bars, and it is far
+  faster than clicking LIVE and squinting. Drive it with generated WAVs — a 440 Hz tone as a
+  steady-signal control, and an exponentially-decaying 55 Hz thump every 500 ms as a 120 BPM beat
+  source — played through `System.Media.SoundPlayer.PlayLooping()`. **Always confirm the tone is
+  actually audible** via `MMDevice.AudioMeterInformation.MasterPeakValue` before trusting a
+  negative result; one "no false positives" run was meaningless because the player had not
+  started.
 
 **Carried over, roughly in priority order:**
 
@@ -405,7 +434,8 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **Three fixes are committed but unreleased** (`06ada69`) — uninstall unbypass, single instance, settings scroll reset. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| **Five changes are committed but unreleased** (`06ada69`, `3c920ba`, `82efc1b`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix + BEAT mode. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| **BEAT mode and the fixed LIVE mode have never been seen running in the app** — both were validated through a standalone harness against generated audio, not by eye | **Open.** Quit the tray instance, rebuild, play music, click each button |
 | **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
 | **Node 20.9.0 cannot build the website** (Astro needs ≥22.12.0) — no dev server, so visual changes ship unverified | **Open.** CI uses Node 22 so deploys are fine; worth fixing before the comparison videos land |
