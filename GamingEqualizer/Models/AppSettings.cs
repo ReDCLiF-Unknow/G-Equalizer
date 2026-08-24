@@ -17,6 +17,10 @@ public class AppSettings
     public bool BoostEnabled { get; set; } = false;
     // 0 = Gradient, 1 = Solid, 2 = Peak Glow
     public int VizColorMode { get; set; } = 0;
+    // Frequency-response panel driven by real audio instead of the EQ curve.
+    // Mutually exclusive; at most one is ever true.
+    public bool VizLiveMode { get; set; } = false;
+    public bool VizBeatMode { get; set; } = false;
     public bool AutoPresetEnabled { get; set; } = false;
     public double WindowWidth { get; set; } = 820;
     public double WindowHeight { get; set; } = 610;
