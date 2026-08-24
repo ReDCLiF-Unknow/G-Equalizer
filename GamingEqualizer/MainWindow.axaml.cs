@@ -75,22 +75,44 @@ public partial class MainWindow : Window
     /// <summary>True when the bars are driven by audio rather than by the EQ curve.</summary>
     private bool AudioDriven => _liveMode || _beatMode;
 
-    // Onset detection over the kick-drum band. Bars are ~85 ms apart (4096 samples at 48 kHz),
-    // so a beat lands within about a frame of the real one — fine for a visual pulse.
+    // Onset detection runs per frequency band rather than on the kick band alone, so a snare,
+    // a hi-hat or a synth stab each pulse their own slice of the row instead of everything
+    // riding on the bass alone. Boundaries are bar indices into the analyzer's 80 log-spaced
+    // bars (20 Hz-20 kHz): {0,17,35,53,80} works out to roughly 20-90 Hz / 90-400 Hz /
+    // 400 Hz-2 kHz / 2-20 kHz. Bars are ~85 ms apart (4096 samples at 48 kHz), so a beat lands
+    // within about a frame of the real one — fine for a visual pulse.
+    private static readonly int[]    BeatBandBounds = { 0, 17, 35, 53, VizBars };
+    private static readonly int      BeatBandCount  = BeatBandBounds.Length - 1;
+    // Bass sustains into a boomy decay; treble is a short tick. One rate per band reads more
+    // like the actual instruments than a single shared decay would.
+    private static readonly double[] BeatBandDecay  = { 0.93, 0.91, 0.89, 0.86 };
+
     private const int    BeatHistoryFrames = 18;     // ~1.5 s of context
-    private const int    BeatBassBars      = 16;     // bars 0-15 ≈ 20-80 Hz
     private const double BeatThreshold     = 1.25;   // energy must exceed this × the local average
     private const double BeatFloor         = 0.6;    // ignore near-silence
-    private const double BeatRefractoryMs  = 200;    // caps at ~300 BPM, stops double triggers
+    private const double BeatRefractoryMs  = 200;    // caps at ~300 BPM per band, stops double triggers
     private const double BeatRise          = 1.15;   // must be climbing, not merely loud
-    private const double BeatDecayPerTick  = 0.90;   // pulse falls away over roughly 400 ms
 
-    private readonly double[] _beatHistory = new double[BeatHistoryFrames];
-    private int               _beatHistoryCount;
-    private int               _beatHistoryPos;
-    private double            _beatPrevEnergy;
-    private DateTime          _lastBeatAt = DateTime.MinValue;
-    private double            _beatPulse;   // 0-1, set on a beat and decayed every tick
+    private readonly double[][]  _beatHistory      = InitBandArrays(BeatBandCount, BeatHistoryFrames);
+    private readonly int[]       _beatHistoryCount = new int[BeatBandCount];
+    private readonly int[]       _beatHistoryPos   = new int[BeatBandCount];
+    private readonly double[]    _beatPrevEnergy   = new double[BeatBandCount];
+    private readonly DateTime[]  _lastBeatAt       = InitDates(BeatBandCount);
+    private readonly double[]    _beatPulse        = new double[BeatBandCount];   // 0-1 per band, decayed every tick
+
+    private static double[][] InitBandArrays(int bands, int frames)
+    {
+        var a = new double[bands][];
+        for (int i = 0; i < bands; i++) a[i] = new double[frames];
+        return a;
+    }
+
+    private static DateTime[] InitDates(int bands)
+    {
+        var a = new DateTime[bands];
+        Array.Fill(a, DateTime.MinValue);
+        return a;
+    }
 
     // Status dot pulse
     private DispatcherTimer? _pulseTimer;
@@ -155,6 +177,7 @@ public partial class MainWindow : Window
         BuildPresetChips();
         RestoreState();
         BuildVisualizer();
+        RestoreAudioVizMode();
         StartPulse();
         RefreshAutoPresetTimer();
 
@@ -1007,10 +1030,20 @@ public partial class MainWindow : Window
     }
 
     private void LiveModeButton_Click(object? sender, RoutedEventArgs e)
-        => ToggleLiveMode((Button)sender!);
+    {
+        SetLiveMode(!_liveMode);
+        _settings.VizLiveMode = _liveMode;
+        _settings.VizBeatMode = _beatMode;   // turning LIVE on may have switched BEAT off
+        _settings.Save();
+    }
 
     private void BeatModeButton_Click(object? sender, RoutedEventArgs e)
-        => ToggleBeatMode((Button)sender!);
+    {
+        SetBeatMode(!_beatMode);
+        _settings.VizBeatMode = _beatMode;
+        _settings.VizLiveMode = _liveMode;   // turning BEAT on may have switched LIVE off
+        _settings.Save();
+    }
 
     private void CalibrationButton_Click(object? sender, RoutedEventArgs e)
         => OpenCalibrationWizard();
@@ -1336,16 +1369,22 @@ public partial class MainWindow : Window
 
         if (_beatMode)
         {
-            // Decay between beats so each one reads as a distinct hit rather than a level.
-            _beatPulse *= BeatDecayPerTick;
+            for (int b = 0; b < BeatBandCount; b++)
+                _beatPulse[b] *= BeatBandDecay[b];
 
             for (int i = 0; i < VizBars; i++)
             {
-                // An arch, tallest in the middle, so a pulse looks like a shape breathing
-                // rather than a solid block switching on and off.
-                double t    = i / (double)(VizBars - 1);
-                double arch = 0.35 + 0.65 * Math.Sin(Math.PI * t);
-                _vizTarget[i] = _beatPulse * arch * 12.0;
+                int band = BandForBar(i);
+                int lo   = BeatBandBounds[band];
+                int hi   = BeatBandBounds[band + 1];
+
+                // Each band gets its own arch, tallest at the middle of its own bar range,
+                // rather than one hump spanning the whole row — that is what makes different
+                // parts of the row light up independently instead of the whole thing moving
+                // as a single block.
+                double localT = hi > lo + 1 ? (i - lo) / (double)(hi - lo - 1) : 0.5;
+                double arch   = 0.35 + 0.65 * Math.Sin(Math.PI * localT);
+                _vizTarget[i] = _beatPulse[band] * arch * 12.0;
             }
         }
 
@@ -1962,38 +2001,41 @@ public partial class MainWindow : Window
 
     // ── Live mode ────────────────────────────────────────────────────────────
 
-    internal void ToggleLiveMode(Button liveButton)
+    /// <summary>Restores LIVE/BEAT from settings. Safe to call every time OnOpened fires — unlike
+    /// the click handlers this sets an absolute state rather than toggling, so a second OnOpened
+    /// (a hide-to-tray/restore cycle re-fires it) cannot flip an already-restored mode back off.</summary>
+    private void RestoreAudioVizMode()
     {
-        bool want = !_liveMode;
-        if (want && _beatMode) ToggleBeatMode(BeatModeButton);   // the two are exclusive
+        if (_settings.VizBeatMode) SetBeatMode(true);
+        else if (_settings.VizLiveMode) SetLiveMode(true);
+    }
 
-        _liveMode = want;
+    /// <summary>Idempotent: setting the mode it is already in is a no-op, which is what makes
+    /// <see cref="RestoreAudioVizMode"/> safe to call unconditionally on every OnOpened.</summary>
+    private void SetLiveMode(bool enable)
+    {
+        if (enable == _liveMode) return;
+        if (enable && _beatMode) SetBeatMode(false);
+
+        _liveMode = enable;
         if (_liveMode && !StartAnalyzer()) { _liveMode = false; return; }
 
-        liveButton.Content = _liveMode ? "◉ LIVE" : "○ LIVE";
-        liveButton.Theme   = _liveMode ? PrimaryButtonTheme : null; // null = implicit theme
+        LiveModeButton.Content = _liveMode ? "◉ LIVE" : "○ LIVE";
+        LiveModeButton.Theme   = _liveMode ? PrimaryButtonTheme : null; // null = implicit theme
         if (!_liveMode) StopAnalyzerIfIdle();
     }
 
-    internal void ToggleBeatMode(Button beatButton)
+    private void SetBeatMode(bool enable)
     {
-        bool want = !_beatMode;
-        if (want && _liveMode) ToggleLiveMode(LiveModeButton);
+        if (enable == _beatMode) return;
+        if (enable && _liveMode) SetLiveMode(false);
 
-        _beatMode = want;
+        _beatMode = enable;
         if (_beatMode && !StartAnalyzer()) { _beatMode = false; return; }
 
-        beatButton.Content = _beatMode ? "◉ BEAT" : "♪ BEAT";
-        beatButton.Theme   = _beatMode ? PrimaryButtonTheme : null;
-
-        if (_beatMode)
-        {
-            _beatHistoryCount = 0;
-            _beatPrevEnergy   = 0;
-            _beatHistoryPos   = 0;
-            _beatPulse        = 0;
-            _lastBeatAt       = DateTime.MinValue;
-        }
+        BeatModeButton.Content = _beatMode ? "◉ BEAT" : "♪ BEAT";
+        BeatModeButton.Theme   = _beatMode ? PrimaryButtonTheme : null;
+        if (_beatMode) ResetBeatDetectorState();
         else StopAnalyzerIfIdle();
     }
 
@@ -2023,7 +2065,7 @@ public partial class MainWindow : Window
         if (AudioDriven) return;
         _spectrum?.Dispose();
         _spectrum  = null;
-        _beatPulse = 0;
+        Array.Clear(_beatPulse);
         SetVizTargets();
     }
 
@@ -2040,44 +2082,80 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Flags a beat when energy in the kick band jumps above its own recent average. Comparing
+    /// Flags a beat in a band when its energy jumps above its own recent average. Comparing
     /// against a rolling local average rather than a fixed level is what lets it follow a track
     /// through quiet and loud passages instead of firing constantly in one and never in the other.
+    /// Run once per band so a kick, a snare and a hi-hat each surface independently.
     /// </summary>
     private void DetectBeat(double[] bars)
     {
-        double energy = 0;
-        for (int i = 0; i < BeatBassBars && i < bars.Length; i++) energy += bars[i];
-        energy /= BeatBassBars;
+        for (int band = 0; band < BeatBandCount; band++)
+            DetectBandBeat(band, BandEnergy(bars, band));
+    }
 
+    private double BandEnergy(double[] bars, int band)
+    {
+        int lo = BeatBandBounds[band];
+        int hi = Math.Min(BeatBandBounds[band + 1], bars.Length);
+        if (hi <= lo) return 0;
+
+        double energy = 0;
+        for (int i = lo; i < hi; i++) energy += bars[i];
+        return energy / (hi - lo);
+    }
+
+    private void DetectBandBeat(int band, double energy)
+    {
         double average = 0;
-        if (_beatHistoryCount > 0)
+        if (_beatHistoryCount[band] > 0)
         {
-            for (int i = 0; i < _beatHistoryCount; i++) average += _beatHistory[i];
-            average /= _beatHistoryCount;
+            var history = _beatHistory[band];
+            for (int i = 0; i < _beatHistoryCount[band]; i++) average += history[i];
+            average /= _beatHistoryCount[band];
         }
 
-        double previous = _beatPrevEnergy;
-        _beatPrevEnergy = energy;
+        double previous = _beatPrevEnergy[band];
+        _beatPrevEnergy[band] = energy;
 
-        _beatHistory[_beatHistoryPos] = energy;
-        _beatHistoryPos = (_beatHistoryPos + 1) % BeatHistoryFrames;
-        if (_beatHistoryCount < BeatHistoryFrames) _beatHistoryCount++;
+        _beatHistory[band][_beatHistoryPos[band]] = energy;
+        _beatHistoryPos[band] = (_beatHistoryPos[band] + 1) % BeatHistoryFrames;
+        if (_beatHistoryCount[band] < BeatHistoryFrames) _beatHistoryCount[band]++;
 
         // Needs a full window before it can judge anything as "louder than usual".
-        if (_beatHistoryCount < BeatHistoryFrames) return;
+        if (_beatHistoryCount[band] < BeatHistoryFrames) return;
         if (energy < BeatFloor || energy < average * BeatThreshold) return;
 
         // Must also be rising. Without this the rolling average self-oscillates on sustained
         // sound: a spike lifts the average, the ratio dips under the threshold, the spike ages
         // out, and it fires again — a steady tone produced a phantom beat roughly twice a
-        // second. A real onset is a jump from the frame before it.
+        // second in testing. A real onset is a jump from the frame before it.
         if (energy < previous * BeatRise) return;
 
-        if ((DateTime.UtcNow - _lastBeatAt).TotalMilliseconds < BeatRefractoryMs) return;
+        if ((DateTime.UtcNow - _lastBeatAt[band]).TotalMilliseconds < BeatRefractoryMs) return;
 
-        _lastBeatAt = DateTime.UtcNow;
+        _lastBeatAt[band] = DateTime.UtcNow;
         double strength = Math.Clamp((energy / Math.Max(average, 0.0001) - 1.0) / 1.5, 0.35, 1.0);
-        _beatPulse = Math.Max(_beatPulse, strength);
+        _beatPulse[band] = Math.Max(_beatPulse[band], strength);
+    }
+
+    /// <summary>Which beat band a visualizer bar index falls into.</summary>
+    private static int BandForBar(int barIndex)
+    {
+        for (int b = BeatBandCount - 1; b >= 0; b--)
+            if (barIndex >= BeatBandBounds[b]) return b;
+        return 0;
+    }
+
+    private void ResetBeatDetectorState()
+    {
+        for (int b = 0; b < BeatBandCount; b++)
+        {
+            Array.Clear(_beatHistory[b]);
+            _beatHistoryCount[b] = 0;
+            _beatHistoryPos[b]   = 0;
+            _beatPrevEnergy[b]   = 0;
+            _beatPulse[b]        = 0;
+            _lastBeatAt[b]       = DateTime.MinValue;
+        }
     }
 }
