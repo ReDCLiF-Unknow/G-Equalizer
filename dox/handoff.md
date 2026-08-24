@@ -1,6 +1,34 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-15)
+## ⏭️ Start here (2026-08-24)
+
+**BEAT mode is done and verified live, not just offline.** Five independent frequency bands
+(~20-80 Hz / 80-300 Hz / 300 Hz-2 kHz / 2-6 kHz / 6-20 kHz), each with its own onset detector and
+its own arch that tapers to true zero at its edges — confirmed with screenshots of the actual
+running app (not the offline harness) playing a synthetic kick+hihat mix: five separated peaks,
+independently rising and falling frame to frame, not one ridge moving as a block. LIVE/BEAT
+persistence also confirmed live and unprompted — a freshly launched process came up with BEAT
+already on, no click, because `RestoreAudioVizMode()` read `VizBeatMode: true` from
+`AppSettings.json` at startup. See `3a77e0f`, `dcef541`, `17cd91b`, `82efc1b` for the sequence.
+
+**Correction: an elevated foreground process CAN be closed from inside a session, conditionally.**
+Every earlier note in this document says otherwise — that was wrong, or at least incomplete.
+`Stop-Process` against an elevated PID fails with Access Denied from a medium-integrity shell, as
+documented, but spawning an elevated helper works:
+```powershell
+Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','taskkill /PID <pid> /F'
+```
+This produced a UAC prompt and succeeded within seconds on 2026-08-24, unblocking a `bin\Debug`
+lock that had been held by a stale process for hours across most of a session. The catch: it
+depends on a human being present to approve the prompt — the same document earlier records this
+exact approach stalling on an unapproved prompt. Try it before assuming a lock is unbreakable; just
+don't expect it to work unattended.
+
+**Still open from before, now with an accurate count:** six code commits (`06ada69`, `3c920ba`,
+`82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`) sit on `main` ahead of the last real release
+(`v3.0.3`, tagged, published, live on the website). Nothing in them has ever shipped. **A version
+bump, publish, and `v3.0.4` release is the next concrete step** — see the table below for what it
+would contain.
 
 **The build works again.** SDK `10.0.400` was installed on 2026-08-15 via
 `winget install --id Microsoft.DotNet.SDK.10`; before that the box had only `8.0.204` against a
@@ -434,8 +462,8 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **Five changes are committed but unreleased** (`06ada69`, `3c920ba`, `82efc1b`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix + BEAT mode. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
-| **BEAT mode and the fixed LIVE mode have never been seen running in the app** — both were validated through a standalone harness against generated audio, not by eye | **Open.** Quit the tray instance, rebuild, play music, click each button |
+| **Six code commits are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, 5-band BEAT mode, LIVE/BEAT persistence. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
 | **Node 20.9.0 cannot build the website** (Astro needs ≥22.12.0) — no dev server, so visual changes ship unverified | **Open.** CI uses Node 22 so deploys are fine; worth fixing before the comparison videos land |
