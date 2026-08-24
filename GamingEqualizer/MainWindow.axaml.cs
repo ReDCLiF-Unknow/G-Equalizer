@@ -78,14 +78,15 @@ public partial class MainWindow : Window
     // Onset detection runs per frequency band rather than on the kick band alone, so a snare,
     // a hi-hat or a synth stab each pulse their own slice of the row instead of everything
     // riding on the bass alone. Boundaries are bar indices into the analyzer's 80 log-spaced
-    // bars (20 Hz-20 kHz): {0,17,35,53,80} works out to roughly 20-90 Hz / 90-400 Hz /
-    // 400 Hz-2 kHz / 2-20 kHz. Bars are ~85 ms apart (4096 samples at 48 kHz), so a beat lands
-    // within about a frame of the real one — fine for a visual pulse.
-    private static readonly int[]    BeatBandBounds = { 0, 17, 35, 53, VizBars };
+    // bars (20 Hz-20 kHz): {0,16,31,53,65,80} works out to roughly 20-80 Hz (kick/sub) /
+    // 80-300 Hz (bass) / 300 Hz-2 kHz (mid, vocals/snare body) / 2-6 kHz (presence) /
+    // 6-20 kHz (air, hats/cymbals). Bars are ~85 ms apart (4096 samples at 48 kHz), so a beat
+    // lands within about a frame of the real one — fine for a visual pulse.
+    private static readonly int[]    BeatBandBounds = { 0, 16, 31, 53, 65, VizBars };
     private static readonly int      BeatBandCount  = BeatBandBounds.Length - 1;
     // Bass sustains into a boomy decay; treble is a short tick. One rate per band reads more
     // like the actual instruments than a single shared decay would.
-    private static readonly double[] BeatBandDecay  = { 0.93, 0.91, 0.89, 0.86 };
+    private static readonly double[] BeatBandDecay  = { 0.94, 0.92, 0.90, 0.88, 0.85 };
 
     private const int    BeatHistoryFrames = 18;     // ~1.5 s of context
     private const double BeatThreshold     = 1.25;   // energy must exceed this × the local average
@@ -1378,12 +1379,13 @@ public partial class MainWindow : Window
                 int lo   = BeatBandBounds[band];
                 int hi   = BeatBandBounds[band + 1];
 
-                // Each band gets its own arch, tallest at the middle of its own bar range,
-                // rather than one hump spanning the whole row — that is what makes different
-                // parts of the row light up independently instead of the whole thing moving
-                // as a single block.
+                // Each band gets its own arch, rising from zero at its own edges to a peak at
+                // its own centre — tapering fully to zero (not a raised floor) is what makes a
+                // quiet band actually sink out of view next to an active one, so five distinct
+                // peaks stand apart instead of blurring into one continuous ridge across the
+                // whole row.
                 double localT = hi > lo + 1 ? (i - lo) / (double)(hi - lo - 1) : 0.5;
-                double arch   = 0.35 + 0.65 * Math.Sin(Math.PI * localT);
+                double arch   = Math.Sin(Math.PI * localT);
                 _vizTarget[i] = _beatPulse[band] * arch * 12.0;
             }
         }
