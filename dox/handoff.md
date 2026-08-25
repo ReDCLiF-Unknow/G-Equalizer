@@ -1,6 +1,69 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-24)
+## ⏭️ Start here (2026-08-25)
+
+**Two audio-correctness fixes landed that change what users actually hear. Neither has shipped.**
+These matter more than anything else outstanding, and both were found by reading code rather than
+by a bug report.
+
+1. **The playback EQ was being applied to microphones** (`d944e1a`). `config.txt` carried no
+   `Device:` line, so EqualizerAPO applied it to every device it was installed on — tick a mic in
+   the Configurator and the PUBG preset's +7 dB 4 kHz footstep boost went onto the user's voice.
+   Both config builders now emit a `Device:` line listing every active render device, then
+   `Device: all` to reset. Syntax was taken from EqualizerAPO's configuration reference, **not
+   guessed** — a pattern that matches nothing disables the EQ everywhere with no visible error,
+   which is worse than the bug. Patterns are `;`-separated and every space-separated word must
+   appear in that device's `"DeviceName ConnectionName GUID"` string; brackets are stripped
+   because `FriendlyName` is `"ConnectionName (DeviceName)"` and the match string has none.
+   Verified on hardware by a probe that calls the shipping method by reflection and applies the
+   documented rule: the Arctis is the ideal case, exposing *both* `Headphones (Arctis Nova Pro
+   Wireless)` and `Microphone (Arctis Nova Pro Wireless)` — identical device names separated only
+   by connection name. All 4 render devices matched, the mic did not. Enumeration failure falls
+   back to an unscoped config (old, wrong-but-working) rather than risking a dead EQ.
+2. **Every number was written in the wrong format on this machine** (`a325dc2`). EqualizerAPO
+   parses floats "using point (.) as the decimal separator", locale-independently. The writer used
+   current-culture formatting, and this box is `en-DE` — `(-3.7f).ToString("F1")` yields `"-3,7"`,
+   and `config.txt` on disk really did contain `Preamp: +3,7 dB`. The `Q 1.41` on those same lines
+   was a hardcoded literal, which is what made the inconsistency visible. All five numeric lines
+   now go through a `FormattableString.Invariant` helper. **This is a live candidate for the
+   long-standing "nobody has confirmed the EQ is audible" item**, but not proof: the impact
+   depends on whether EqualizerAPO's parser truncates at the comma (integer preset gains would
+   have survived, only fractional preamp/calibration values lost) or rejects the line outright.
+   That cannot be settled without listening. The read path was always correct —
+   `AutoEQImporter` already used `InvariantCulture`.
+
+**Visualizer restyling, both scoped so nothing existing changed:**
+
+- **NEON** (`89345cf`) is a fourth colour mode on the existing cycle button: segmented bars, a
+  fixed pink-to-cyan sweep, and a mirrored reflection. Segmentation is one overlay of
+  background-coloured stripes across the canvas, not 80 bars split into blocks — it segments bars
+  and reflections together for ~18 static rectangles instead of ~1200 repositioned every 16 ms.
+  Both stripes and reflections are NEON-only; GRADIENT/SOLID/PEAK GLOW were screenshot-verified
+  unchanged. Its palette deliberately ignores the user's accent, since the point is a specific
+  look.
+- **LIVE draws a flowing contour wave instead of bars** (`5c7ad4d`): nine contours of the same
+  curve at different amplitudes, mirrored, with a canvas-spanning gradient so hue tracks
+  frequency. Overlapping strokes at a peak produce the glow — Avalonia has no cheap per-frame
+  blur. BEAT keeps its bars.
+  **Driving this from the time-domain waveform was tried and reverted — do not retry it blind.**
+  Real loopback audio at ~12 analyser frames a second does not produce the clean sweeping curves
+  of a stylised reference image, and at enough gain to be visible it saturated its own clamp into
+  flat-topped trapezoids, worse than what it replaced. The spectrum is always positive, so the
+  mirror is a reflection rather than a true oscilloscope swing; that is a deliberate trade for a
+  shape that stays readable frame to frame.
+
+**Three unrelated failure paths were hardened in the same pass** (`89345cf`): `ResetAccent_Click`
+toggled `_suppressSettings` without `try`/`finally` (a throw would silently deaden the whole
+Settings panel); `AutoPresetTick` ended in a bare `catch{}` so per-game switching could stop
+forever with no trace (now logged, not banner'd — it ticks every 2 s); and the loopback capture had
+no `RecordingStopped` handler, so LIVE/BEAT froze silently if the default device changed. That last
+one needed an intentional-stop flag: `Dispose()` fires `RecordingStopped` synchronously, so
+without it, closing the app with BEAT on would try to start a fresh capture on a window
+mid-teardown. **The device-change recovery is code-reviewed, not exercised** — triggering it means
+a real disconnect, and it only helps when the device errors out, not when Windows' default is
+merely switched while the old device stays connected.
+
+---
 
 **Both land in `f4af92a`, cleanly verified this time — a live Discord call had contaminated every
 earlier attempt (see the technique below), and a quiet endpoint (confirmed via
@@ -32,9 +95,12 @@ earlier attempt (see the technique below), and a quiet endpoint (confirmed via
    during playback shows the tinted band's cluster reading visibly greyer/more muted than the
    two full-colour clusters either side of it, the alternating pattern by design.
 
-**BEAT mode is done and verified live, not just offline.** Five independent frequency bands
-(~20-80 Hz / 80-300 Hz / 300 Hz-2 kHz / 2-6 kHz / 6-20 kHz), each with its own onset detector and
-its own arch that tapers to true zero at its edges — confirmed with screenshots of the actual
+**BEAT mode is done and verified live, not just offline.** *(Superseded in part: this describes
+the five-band stage. It is nine bands now — see item 2 above for the current boundaries. The
+verification described here still stands, it was simply redone after the split.)* Five independent
+frequency bands (~20-80 Hz / 80-300 Hz / 300 Hz-2 kHz / 2-6 kHz / 6-20 kHz), each with its own
+onset detector and its own arch that tapers to true zero at its edges — confirmed with screenshots
+of the actual
 running app (not the offline harness) playing a synthetic kick+hihat mix: five separated peaks,
 independently rising and falling frame to frame, not one ridge moving as a block. LIVE/BEAT
 persistence also confirmed live and unprompted — a freshly launched process came up with BEAT
@@ -345,14 +411,20 @@ not ProgramData. Checking the obvious paths reports false failures.
 
 ### Microphone EQ (considered, deferred)
 
-Feasible — EqualizerAPO supports capture devices — but it needs `Device:`-scoped config sections,
-which `EQConfigWriter` does not currently emit.
+Feasible — EqualizerAPO supports capture devices — and the blocker is now gone: `EQConfigWriter`
+emits `Device:`-scoped sections as of `d944e1a`.
 
-**This is a live bug, not just a blocker:** `BuildConfig`/`BuildPerEarConfig` write a flat
-`config.txt` with no `Device:` lines, so EqualizerAPO applies it to *every* device it is installed
-on. If a user ticks a microphone in the Configurator, **the playback EQ gets applied to their
-mic** — a +7 dB 4 kHz footstep boost on their voice. Worth fixing whether or not mic EQ is built.
-Users should be told to tick playback devices only until then.
+**The live bug that came with the missing scoping is fixed.** `BuildConfig`/`BuildPerEarConfig`
+used to write a flat `config.txt` with no `Device:` lines, so EqualizerAPO applied it to *every*
+device it was installed on — ticking a microphone in the Configurator put the playback EQ, +7 dB
+at 4 kHz and all, onto the user's voice. Both builders now scope to active render devices. The
+advice to "tick playback devices only" is no longer needed for safety, though it remains the
+sensible default until mic EQ actually exists.
+
+**What building mic EQ would now take:** a second scoped block in the same file, listing capture
+devices via `DataFlow.Capture` (the render-side helper in `EQConfigWriter` is directly reusable —
+`DevicePattern` is dataflow-agnostic) with its own gains, written after the render block and before
+the closing `Device: all`. The hard part was always the scoping, and that is done and verified.
 
 ---
 
@@ -503,13 +575,13 @@ Then rebuild installer from `dist/`:
 |---|---|
 | BEAT fired twice per sound — once on real onset, once on an abrupt stop's spectral-leakage click | Fixed (`f4af92a`): one-frame candidate hold + `BeatClickRejectFloor`. Verified clean (quiet endpoint confirmed first): silence/tone hold at zero, the click is actively rejected. Caveat: a pure-tone percussion proxy can look like a false rejection — use broadband noise when testing this, see "Start here" |
 | Nine beat bands with a tinted interleave, added by request | Fixed (`f4af92a`). Negative controls clean across all nine bands; tint confirmed live (zoomed screenshot shows the alternating muted/full-colour pattern) |
-| **Seven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, BEAT mode + persistence, the click fix + 9-band tinting. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| **Eleven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`) — including two that change what users hear: the mic-EQ scoping and the locale/decimal fix. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open, and now the highest-value item.** Needs a version bump, publish, `makensis`, release |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
-| **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
+| The playback EQ was applied to every device EqualizerAPO is attached to, microphones included | Fixed (`d944e1a`) — `Device:` scoping verified on hardware against both endpoints of the same headset. This also unblocks mic EQ, since `Device:`-scoped sections were the missing piece: see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
 | **Node 20.9.0 cannot build the website** (Astro needs ≥22.12.0) — no dev server, so visual changes ship unverified | **Open.** CI uses Node 22 so deploys are fine; worth fixing before the comparison videos land |
-| `ResetAccent_Click` sets `_suppressSettings` true/false around `RefreshAccentControls()` with no `try`/`finally` | **Open, latent.** A throw there silently deadens the whole Settings panel until restart — the same shape as the bug hardened in `PopulateSettingsPanel` |
-| Auto-preset switching ends in a bare `catch { }`; `BypassAndQuit` swallows a failed bypass; APO health is only checked in `OnOpened` | **Open, minor.** Each fails silently: per-game switching can stop forever, quitting can leave the EQ applied, a mid-session APO detach goes unreported |
+| `ResetAccent_Click` toggled `_suppressSettings` with no `try`/`finally` | Fixed (`89345cf`) — a throw there would have silently deadened the whole Settings panel until restart, the same shape as the `PopulateSettingsPanel` bug |
+| Auto-preset switching ended in a bare `catch { }` | Fixed (`89345cf`) — now logged, deliberately not banner'd, since it ticks every 2 s. **Still open:** `BypassAndQuit` swallows a failed bypass (quitting can leave the EQ applied), and APO health is only checked in `OnOpened` so a mid-session detach goes unreported |
 | Uninstalling left the EQ applied forever — the uninstaller never reset EqualizerAPO's `config.txt` | Fixed (`06ada69`), NSIS compiles; **not yet exercised by a real uninstall** |
 | Nothing stopped two instances running — the second silently held no hotkeys and both wrote `config.txt` | Fixed (`06ada69`), verified: two launches leave one process. The surface-a-hidden-window path is **not** yet hands-on tested |
 | Settings panel kept its scroll offset under a fixed heading, making a scrolled list look like the top | Fixed (`06ada69`) |
