@@ -64,6 +64,19 @@ public partial class MainWindow : Window
     private DispatcherTimer?             _vizTimer;
     private bool                         _positioningVizBars;
 
+    // Mirrored copies drawn below the centre line, only while audio-driven. They deliberately
+    // share each bar's brush object rather than owning one, so every colour change follows
+    // automatically without a second update pass.
+    private readonly Rectangle[] _vizReflections = new Rectangle[VizBars];
+    private const double         ReflectionOpacity = 0.22;
+
+    // Horizontal background-coloured stripes laid over the whole canvas. One overlay segments
+    // every bar and reflection at once, which is far cheaper than splitting 80 bars into
+    // stacked blocks and repositioning all of them each frame.
+    private readonly List<Rectangle> _vizStripes    = new();
+    private const double             StripePitch    = 5.0;   // segment + gap, in px
+    private const double             StripeGap      = 2.0;   // the punched-out part
+
     // Live audio
     private bool                   _liveMode;
     private AudioSpectrumAnalyzer? _spectrum;
@@ -74,6 +87,14 @@ public partial class MainWindow : Window
 
     /// <summary>True when the bars are driven by audio rather than by the EQ curve.</summary>
     private bool AudioDriven => _liveMode || _beatMode;
+
+    // The loopback capture dies on its own whenever the default playback device changes —
+    // most commonly a wireless headset reconnecting — with no event to distinguish that from a
+    // capture we stopped on purpose. This flag is that distinction; the counter/window below
+    // bound how many silent recovery attempts get made before giving up and telling the user.
+    private bool     _analyzerStoppingIntentionally;
+    private int      _analyzerRecoveryAttempts;
+    private DateTime _analyzerRecoveryWindowStart = DateTime.MinValue;
 
     // Onset detection runs per frequency band rather than on the kick band alone, so a snare,
     // a hi-hat or a synth stab each pulse their own slice of the row instead of everything
@@ -228,7 +249,14 @@ public partial class MainWindow : Window
     {
         if (_hwnd != IntPtr.Zero) HotkeyManager.Unregister(_hwnd);
         _autoPresetTimer?.Stop();
+
+        // Same reasoning as StopAnalyzerIfIdle: Dispose() fires RecordingStopped synchronously,
+        // and without this flag HandleAnalyzerStopped would see AudioDriven still true (this
+        // does not touch _liveMode/_beatMode) and try to start a fresh capture on a window that
+        // is being torn down.
+        _analyzerStoppingIntentionally = true;
         _spectrum?.Dispose();
+        _analyzerStoppingIntentionally = false;
 
         if (WindowState == WindowState.Normal)
         {
@@ -244,12 +272,28 @@ public partial class MainWindow : Window
 
     private static Color BandColor(double t) => ThemeColors.Band(t);
 
+    // Fixed neon palette, deliberately independent of the user's accent: this mode exists to
+    // reproduce a specific pink-to-cyan look, so it does not follow ThemeColors the way the
+    // gradient/solid modes do. Pick a different mode to get accent-coloured bars back.
+    private static readonly Color NeonStart = Color.Parse("#ff2ea6");
+    private static readonly Color NeonEnd   = Color.Parse("#38bdf8");
+
+    private static Color NeonColor(double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        return Color.FromRgb(
+            (byte)(NeonStart.R + (NeonEnd.R - NeonStart.R) * t),
+            (byte)(NeonStart.G + (NeonEnd.G - NeonStart.G) * t),
+            (byte)(NeonStart.B + (NeonEnd.B - NeonStart.B) * t));
+    }
+
     private Color VizBarColor(int barIndex, double intensity, double t)
     {
         return _settings.VizColorMode switch
         {
             1 => ThemeColors.Start,
             2 => PeakGlowColor(intensity, t),
+            3 => NeonColor(t),
             _ => BandColor(t)
         };
     }
@@ -288,10 +332,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private static readonly string[] VizColorModeLabels = { "◈ GRADIENT", "◈ SOLID", "◈ PEAK GLOW" };
+    private static readonly string[] VizColorModeLabels = { "◈ GRADIENT", "◈ SOLID", "◈ PEAK GLOW", "◈ NEON" };
 
     private void ApplyVizColorMode()
     {
+        // Clamp rather than index blindly: a settings file written by a build with more modes
+        // than this one would otherwise throw straight into the Settings panel.
+        if (_settings.VizColorMode < 0 || _settings.VizColorMode >= VizColorModeLabels.Length)
+            _settings.VizColorMode = 0;
+
         if (VizColorModeButton != null)
         {
             VizColorModeButton.Content  = VizColorModeLabels[_settings.VizColorMode];
@@ -313,7 +362,7 @@ public partial class MainWindow : Window
 
     private void VizColorModeButton_Click(object? sender, RoutedEventArgs e)
     {
-        _settings.VizColorMode = (_settings.VizColorMode + 1) % 3;
+        _settings.VizColorMode = (_settings.VizColorMode + 1) % VizColorModeLabels.Length;
         _settings.Save();
         ApplyVizColorMode();
     }
@@ -1283,7 +1332,30 @@ public partial class MainWindow : Window
             _vizBrushes[j] = brush;
             VisualizerCanvas.Children.Add(bar);
             _vizBars[j] = bar;
+
+            // Shares the bar's brush on purpose — see the field comment.
+            var reflection = new Rectangle
+            {
+                Fill      = brush,
+                RadiusX   = 1,
+                RadiusY   = 1,
+                Opacity   = ReflectionOpacity,
+                IsVisible = false
+            };
+            VisualizerCanvas.Children.Add(reflection);
+            _vizReflections[j] = reflection;
         }
+
+        // Added last so they sit above every bar, punching the segment gaps.
+        _vizStripes.Clear();
+        var stripeBrush = new SolidColorBrush(Color.Parse("#07070f"));   // matches TitlebarBrush
+        for (int i = 0; i < 64; i++)
+        {
+            var stripe = new Rectangle { Fill = stripeBrush, Height = StripeGap, IsVisible = false };
+            VisualizerCanvas.Children.Add(stripe);
+            _vizStripes.Add(stripe);
+        }
+
         ApplyVizColorMode();
 
         _vizTimer       = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -1483,7 +1555,24 @@ public partial class MainWindow : Window
 
                     _vizBrushes[j].Color = color;
                 }
+
+                // NEON only, and only while audio-driven. Restricting it to this mode keeps the
+                // other three looking exactly as they always have, and the EQ-curve view already
+                // uses the lower half for negative gains — a reflection there would collide with
+                // real data rather than decorate empty space.
+                var reflection = _vizReflections[j];
+                if (_settings.VizColorMode == 3 && AudioDriven && gain > 0)
+                {
+                    reflection.IsVisible = true;
+                    reflection.Width     = barW;
+                    reflection.Height    = barH;
+                    Canvas.SetLeft(reflection, x);
+                    Canvas.SetTop(reflection, midY + 1);
+                }
+                else reflection.IsVisible = false;
             }
+
+            PositionVizStripes(w, h);
 
             if (_vizCenter != null)
             {
@@ -1492,6 +1581,28 @@ public partial class MainWindow : Window
             }
         }
         finally { _positioningVizBars = false; }
+    }
+
+    /// <summary>
+    /// Lays the background-coloured stripes across the canvas, giving every bar and reflection
+    /// the stacked-segment look in one pass. Only shown in NEON mode — the other three modes
+    /// are meant to read as continuous bars.
+    /// </summary>
+    private void PositionVizStripes(double w, double h)
+    {
+        bool show = _settings.VizColorMode == 3;
+        int needed = show ? (int)(h / StripePitch) : 0;
+
+        for (int i = 0; i < _vizStripes.Count; i++)
+        {
+            var stripe = _vizStripes[i];
+            if (i >= needed) { stripe.IsVisible = false; continue; }
+
+            stripe.IsVisible = true;
+            stripe.Width     = w;
+            Canvas.SetLeft(stripe, 0);
+            Canvas.SetTop(stripe, i * StripePitch);
+        }
     }
 
     private void SetVizTargets()
@@ -1774,9 +1885,12 @@ public partial class MainWindow : Window
 
         ApplyAccentTheme();
 
+        // try/finally: _suppressSettings gates every handler in the Settings panel, so a throw
+        // in RefreshAccentControls would leave it stuck true and silently deaden the whole panel
+        // until restart — the same shape as the bug hardened in PopulateSettingsPanel.
         _suppressSettings = true;
-        RefreshAccentControls();
-        _suppressSettings = false;
+        try { RefreshAccentControls(); }
+        finally { _suppressSettings = false; }
     }
 
     /// <summary>
@@ -2034,7 +2148,13 @@ public partial class MainWindow : Window
                 RefreshTrayTooltip();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // This ticks every 2s in the background with no UI of its own, so a throw here used
+            // to fail silently forever — per-game switching would just stop working with no
+            // trace. Logged, not banner'd: a banner every 2 seconds would be its own bug.
+            Logger.Log($"Auto-preset switching failed: {ex.Message}");
+        }
     }
 
     // ── Live mode ────────────────────────────────────────────────────────────
@@ -2085,6 +2205,7 @@ public partial class MainWindow : Window
         {
             var spectrum = new AudioSpectrumAnalyzer();
             spectrum.OnSpectrum = bars => Dispatcher.UIThread.InvokeAsync(() => OnSpectrumFrame(bars));
+            spectrum.OnStopped  = ex => Dispatcher.UIThread.InvokeAsync(() => HandleAnalyzerStopped(ex));
             spectrum.Start();
             _spectrum = spectrum;
             return true;
@@ -2098,11 +2219,57 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The capture stopped on its own — typically the default playback device changed (a
+    /// wireless headset reconnecting is the common case on this hardware). One bounded run of
+    /// silent recovery attempts against whatever the default device is now; give up and tell
+    /// the user rather than leave LIVE/BEAT frozen and unexplained if it keeps failing.
+    /// </summary>
+    private void HandleAnalyzerStopped(Exception? ex)
+    {
+        if (_analyzerStoppingIntentionally) return;   // we stopped it ourselves; nothing to do
+        if (!AudioDriven) return;                     // already off; this event is stale
+
+        Logger.Log($"Audio capture stopped unexpectedly (device change?): {ex?.Message ?? "no exception"}");
+
+        _spectrum?.Dispose();
+        _spectrum = null;
+
+        var now = DateTime.UtcNow;
+        if ((now - _analyzerRecoveryWindowStart).TotalSeconds > 5)
+        {
+            _analyzerRecoveryWindowStart = now;
+            _analyzerRecoveryAttempts    = 0;
+        }
+        _analyzerRecoveryAttempts++;
+
+        if (_analyzerRecoveryAttempts <= 2 && StartAnalyzer())
+            return;   // recovered silently against the current default device
+
+        bool wasLive = _liveMode;
+        _liveMode = false;
+        _beatMode = false;
+        _settings.VizLiveMode = false;
+        _settings.VizBeatMode = false;
+        _settings.Save();
+        LiveModeButton.Content = "○ LIVE"; LiveModeButton.Theme = null;
+        BeatModeButton.Content = "♪ BEAT"; BeatModeButton.Theme = null;
+        SetVizTargets();
+        ShowErrorBanner($"{(wasLive ? "LIVE" : "BEAT")} turned off: audio capture stopped and " +
+                         "could not restart. Is a playback device available?");
+    }
+
     private void StopAnalyzerIfIdle()
     {
         if (AudioDriven) return;
+
+        // Dispose() synchronously fires RecordingStopped before returning, so the flag has to
+        // be set first — HandleAnalyzerStopped uses it to tell "we did this" from "it died".
+        _analyzerStoppingIntentionally = true;
         _spectrum?.Dispose();
-        _spectrum  = null;
+        _spectrum = null;
+        _analyzerStoppingIntentionally = false;
+
         Array.Clear(_beatPulse);
         SetVizTargets();
     }

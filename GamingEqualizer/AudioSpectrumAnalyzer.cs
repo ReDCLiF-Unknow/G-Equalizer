@@ -19,10 +19,17 @@ public sealed class AudioSpectrumAnalyzer : IDisposable
 
     public Action<double[]>? OnSpectrum { get; set; }
 
+    /// <summary>Fired when the capture stops for any reason, intentional or not — null
+    /// exception on a clean stop, non-null when it died on its own (commonly a default-device
+    /// change, e.g. a wireless headset reconnecting). Runs on NAudio's capture thread, not the
+    /// UI thread.</summary>
+    public Action<Exception?>? OnStopped { get; set; }
+
     public void Start()
     {
-        _capture              = new WasapiLoopbackCapture();
-        _capture.DataAvailable += OnData;
+        _capture                 = new WasapiLoopbackCapture();
+        _capture.DataAvailable   += OnData;
+        _capture.RecordingStopped += (_, e) => OnStopped?.Invoke(e.Exception);
         _capture.StartRecording();
     }
 
