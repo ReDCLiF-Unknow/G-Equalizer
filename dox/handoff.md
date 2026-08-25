@@ -2,6 +2,30 @@
 
 ## ⏭️ Start here (2026-08-24)
 
+**In progress, uncommitted, in `MainWindow.axaml.cs` right now — two changes, one done, one
+half-verified:**
+
+1. **Nine beat bands instead of five**, by request: the original five kept, with one interleaved
+   between each pair (`BeatBandBounds = {0,13,21,29,37,45,53,61,69,80}`), and the four interleaved
+   ones get a lighter, partly transparent tint (`LightenAndFade`, blend 35% toward white, alpha
+   ~55%) so they read as "the extra bands" rather than an unrelated colour. Compiles clean;
+   negative controls (silence, sustained tone) still hold at zero across all nine bands. **Not
+   yet watched live** — a screenshot pass was queued when the second item below interrupted it.
+2. **A real bug, reported by the user and reproduced under controlled conditions: BEAT fired
+   twice per sound, once at the start and once at the end.** Root cause confirmed with a
+   synthetic tone that stops abruptly (attack + sustain + hard cut, no release taper): the FFT
+   frame straddling real signal and true digital silence leaks energy across every bin at once —
+   at the exact moment of cutoff, *every* band spiked simultaneously (`band1` measured
+   `ratio_avg=69.7`, `ratio_prev=241.7`), reading exactly like a broadband onset. The tell: the
+   very next frame reads a **literal `0.000`**, which no real sound, however fast its decay, ever
+   produces. Fix: each detected rise is now held as a candidate for one extra analyzer frame
+   (~85 ms, not visually perceptible) and only actually pulses if the following frame's energy
+   clears `BeatClickRejectFloor = 0.03` — comfortably above true silence, comfortably below any
+   real decay. Compiles clean. **Not cleanly verified yet** — every attempt to re-run the negative
+   controls this session was contaminated by a live Discord call (see the new technique below);
+   the fix needs a quiet re-run before it can be called done, and neither change has been
+   committed.
+
 **BEAT mode is done and verified live, not just offline.** Five independent frequency bands
 (~20-80 Hz / 80-300 Hz / 300 Hz-2 kHz / 2-6 kHz / 6-20 kHz), each with its own onset detector and
 its own arch that tapers to true zero at its edges — confirmed with screenshots of the actual
@@ -162,6 +186,15 @@ independently making the app feel broken:
   actually audible** via `MMDevice.AudioMeterInformation.MasterPeakValue` before trusting a
   negative result; one "no false positives" run was meaningless because the player had not
   started.
+- **A clean negative control needs the whole endpoint quiet, not just "my test file isn't
+  playing."** A supposed silence test on 2026-08-24 produced beats across nearly every band; the
+  cause was a live Discord call, not a bug — confirmed by correlating detections against
+  `MMDevice.AudioMeterInformation.MasterPeakValue` sampled inside the same probe process (peak
+  tracked every "phantom" beat exactly), then `device.AudioSessionManager.Sessions` to find which
+  PID actually held an active stream (`Get-Process -Id <pid>` on the session's `GetProcessID()`
+  named it as Discord; Spotify's session read `Inactive` the whole time and was innocent). WASAPI
+  loopback captures whatever the endpoint outputs, from any process — before trusting a "should be
+  silent" result, check the session list, not just whichever app you expect to be the source.
 
 **Carried over, roughly in priority order:**
 
@@ -462,7 +495,9 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **Six code commits are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, 5-band BEAT mode, LIVE/BEAT persistence. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| **BEAT fired twice per sound** — once on real onset, once on an abrupt stop's spectral-leakage click, indistinguishable from a real hit by threshold/rise alone | **Fix written** (one-frame candidate hold + `BeatClickRejectFloor`), compiles, **not committed, not cleanly verified** — every attempt this session was contaminated by a live Discord call. Needs a quiet re-run of the negative controls, then commit |
+| **Nine beat bands with a tinted interleave, added by request** — the original five plus one between each pair, tinted lighter/partly transparent | **Written, compiles, negative controls pass** (silence/tone hold at zero across all nine bands). **Not committed, not watched live** — queued for a screenshot pass when the bug above was reported instead |
+| **Seven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, plus the two above once committed) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, BEAT mode + persistence, the click fix, 9-band tinting. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
