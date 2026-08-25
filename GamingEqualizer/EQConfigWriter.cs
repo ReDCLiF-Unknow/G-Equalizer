@@ -6,6 +6,18 @@ namespace GamingEqualizer;
 
 public class EQConfigWriter
 {
+    /// <summary>
+    /// Formats a config line with '.' as the decimal separator regardless of the machine's
+    /// locale. EqualizerAPO's configuration reference is explicit that floats are parsed
+    /// "using point (.) as the decimal separator", locale-independently — so on a machine set
+    /// to a comma locale, current-culture formatting wrote "Gain -3.0 dB" as "Gain -3,0 dB"
+    /// and EqualizerAPO could not read it. The Q value on the same line was a hardcoded
+    /// "1.41", which is what made the inconsistency visible.
+    ///
+    /// Every numeric line written to config.txt must go through this.
+    /// </summary>
+    private static string Inv(FormattableString line) => FormattableString.Invariant(line);
+
     private static readonly string EqApoDir = @"C:\Program Files\EqualizerAPO\config";
     private static readonly string ConfigPath = Path.Combine(EqApoDir, "config.txt");
 
@@ -44,20 +56,20 @@ public class EQConfigWriter
         var lines = new List<string>();
 
         AddRenderDeviceScope(lines);
-        lines.Add($"Preamp: {preamp:+0.#;-0.#;0} dB");
+        lines.Add(Inv($"Preamp: {preamp:+0.#;-0.#;0} dB"));
 
         lines.Add("Channel: L");
         for (int i = 0; i < left.Length && i < BandFrequencies.Length; i++)
         {
             float gain = Math.Clamp(left[i], -12f, 12f);
-            lines.Add($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41");
+            lines.Add(Inv($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41"));
         }
 
         lines.Add("Channel: R");
         for (int i = 0; i < right.Length && i < BandFrequencies.Length; i++)
         {
             float gain = Math.Clamp(right[i], -12f, 12f);
-            lines.Add($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41");
+            lines.Add(Inv($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41"));
         }
 
         lines.Add("Channel: ALL");
@@ -71,12 +83,12 @@ public class EQConfigWriter
         var lines = new List<string>();
 
         AddRenderDeviceScope(lines);
-        lines.Add($"Preamp: {preamp:+0.#;-0.#;0} dB");
+        lines.Add(Inv($"Preamp: {preamp:+0.#;-0.#;0} dB"));
 
         for (int i = 0; i < bands.Length && i < BandFrequencies.Length; i++)
         {
             float gain = Math.Clamp(bands[i], -12f, 12f);
-            lines.Add($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41");
+            lines.Add(Inv($"Filter {i + 1}: ON PK Fc {BandFrequencies[i]} Hz Gain {gain:F1} dB Q 1.41"));
         }
 
         ResetDeviceScope(lines);
