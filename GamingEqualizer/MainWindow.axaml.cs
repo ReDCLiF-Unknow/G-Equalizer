@@ -77,6 +77,14 @@ public partial class MainWindow : Window
     private const double             StripePitch    = 5.0;   // segment + gap, in px
     private const double             StripeGap      = 2.0;   // the punched-out part
 
+    // LIVE mode draws a flowing contour wave instead of bars: the same spectrum traced at a
+    // range of amplitudes, mirrored above and below the centre. Where the contours bunch up at
+    // a peak their strokes overlap and brighten it, which is what produces the glow without
+    // needing a real blur — Avalonia has no cheap per-frame blur to lean on here.
+    private const int WaveContours = 9;
+    private readonly Polyline[] _waveUp   = new Polyline[WaveContours];
+    private readonly Polyline[] _waveDown = new Polyline[WaveContours];
+
     // Live audio
     private bool                   _liveMode;
     private AudioSpectrumAnalyzer? _spectrum;
@@ -1346,6 +1354,43 @@ public partial class MainWindow : Window
             _vizReflections[j] = reflection;
         }
 
+        // One gradient shared by every contour, spanning the canvas rather than each polyline,
+        // so the colour depends on horizontal position (frequency) and not on where a given
+        // line happens to start and end.
+        var waveBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(1, 0, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.Parse("#3b82f6"), 0.0),
+                new GradientStop(Color.Parse("#8b5cf6"), 0.5),
+                new GradientStop(Color.Parse("#22d3ee"), 1.0)
+            }
+        };
+
+        for (int i = 0; i < WaveContours; i++)
+        {
+            // Innermost contours are the bright core, fading outward — that is what gives the
+            // glow its centre, rather than a uniform mesh of equally-lit lines.
+            double t       = i / (double)(WaveContours - 1);
+            double opacity = 0.75 - 0.55 * t;
+
+            _waveUp[i]   = NewWaveLine(waveBrush, opacity);
+            _waveDown[i] = NewWaveLine(waveBrush, opacity);
+
+            // The outer edge carries the shape, so keep it defined rather than letting it
+            // dissolve into the faintest line in the stack.
+            if (i == WaveContours - 1)
+            {
+                _waveUp[i].Opacity   = 0.55;
+                _waveDown[i].Opacity = 0.55;
+            }
+
+            VisualizerCanvas.Children.Add(_waveUp[i]);
+            VisualizerCanvas.Children.Add(_waveDown[i]);
+        }
+
         // Added last so they sit above every bar, punching the segment gaps.
         _vizStripes.Clear();
         var stripeBrush = new SolidColorBrush(Color.Parse("#07070f"));   // matches TitlebarBrush
@@ -1362,6 +1407,16 @@ public partial class MainWindow : Window
         _vizTimer.Tick += VizTick;
         _vizTimer.Start();
     }
+
+    private static Polyline NewWaveLine(IBrush stroke, double opacity) => new()
+    {
+        Stroke          = stroke,
+        StrokeThickness = 1,
+        StrokeJoin      = PenLineJoin.Round,
+        Opacity         = opacity,
+        IsVisible       = false,
+        IsHitTestVisible = false
+    };
 
     private void VisualizerCanvas_SizeChanged(object? sender, SizeChangedEventArgs e)
         => PositionVizBars();
@@ -1517,8 +1572,20 @@ public partial class MainWindow : Window
             double step = w / VizBars;
             double barW = Math.Max(1, step - 1.2);
 
+            // LIVE draws the contour wave instead of bars; everything else keeps the bars.
+            bool waveMode = _liveMode;
+            PositionWaveLines(waveMode, w, midY, maxH, step);
+
             for (int j = 0; j < VizBars; j++)
             {
+                if (waveMode)
+                {
+                    _vizBars[j].IsVisible        = false;
+                    _vizReflections[j].IsVisible = false;
+                    continue;
+                }
+                _vizBars[j].IsVisible = true;
+
                 double gain = _vizCurrent[j];
 
                 if (!AudioDriven)
@@ -1581,6 +1648,61 @@ public partial class MainWindow : Window
             }
         }
         finally { _positioningVizBars = false; }
+    }
+
+    /// <summary>
+    /// Traces the spectrum as a stack of contour lines, mirrored above and below the centre.
+    /// Each contour is the same curve at a fraction of full amplitude, so they fan apart where
+    /// the signal is loud and collapse together where it is quiet.
+    /// </summary>
+    private void PositionWaveLines(bool show, double w, double midY, double maxH, double step)
+    {
+        if (!show)
+        {
+            for (int i = 0; i < WaveContours; i++)
+            {
+                _waveUp[i].IsVisible   = false;
+                _waveDown[i].IsVisible = false;
+            }
+            return;
+        }
+
+        // Smoothed once per frame and reused by every contour — the raw per-bar values are too
+        // jagged to read as a flowing wave, and smoothing inside the contour loop would repeat
+        // the same work nine times. Only ±1 wide: a wider window rounded the peaks off and the
+        // whole thing read as one flat bulge rather than a wave.
+        Span<double> smoothed = stackalloc double[VizBars];
+        for (int j = 0; j < VizBars; j++)
+        {
+            double sum = 0; int n = 0;
+            for (int k = Math.Max(0, j - 1); k <= Math.Min(VizBars - 1, j + 1); k++, n++)
+                sum += _vizCurrent[k];
+
+            // Slight expansion around the middle of the range: pushes loud bands up and quiet
+            // ones down, so peaks stand out instead of everything sitting at a similar height.
+            double v = sum / n / 12.0;
+            smoothed[j] = Math.Clamp(Math.Pow(v, 0.85) * 1.35, 0, 1);
+        }
+
+        for (int i = 0; i < WaveContours; i++)
+        {
+            double scale = (i + 1) / (double)WaveContours;
+
+            var up   = new List<Point>(VizBars);
+            var down = new List<Point>(VizBars);
+            for (int j = 0; j < VizBars; j++)
+            {
+                double x = j * step + step / 2.0;
+                double y = smoothed[j] * maxH * scale;
+                up.Add(new Point(x, midY - y));
+                down.Add(new Point(x, midY + y));
+            }
+
+            _waveUp[i].Points     = up;
+            _waveDown[i].Points   = down;
+            _waveUp[i].IsVisible  = true;
+            _waveDown[i].IsVisible = true;
+        }
     }
 
     /// <summary>

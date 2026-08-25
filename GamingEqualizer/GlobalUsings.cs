@@ -12,6 +12,7 @@ global using Avalonia.Controls.Primitives;
 // Import only the shape types we use so System.IO.Path stays unambiguous
 global using Ellipse   = Avalonia.Controls.Shapes.Ellipse;
 global using Rectangle = Avalonia.Controls.Shapes.Rectangle;
+global using Polyline  = Avalonia.Controls.Shapes.Polyline;
 global using Avalonia.Input;
 global using Avalonia.Interactivity;
 global using Avalonia.Layout;
