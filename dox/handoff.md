@@ -2,29 +2,35 @@
 
 ## ⏭️ Start here (2026-08-24)
 
-**In progress, uncommitted, in `MainWindow.axaml.cs` right now — two changes, one done, one
-half-verified:**
+**Both land in `f4af92a`, cleanly verified this time — a live Discord call had contaminated every
+earlier attempt (see the technique below), and a quiet endpoint (confirmed via
+`AudioMeterInformation.MasterPeakValue` reading exactly 0 first) made the difference.**
 
-1. **Nine beat bands instead of five**, by request: the original five kept, with one interleaved
-   between each pair (`BeatBandBounds = {0,13,21,29,37,45,53,61,69,80}`), and the four interleaved
-   ones get a lighter, partly transparent tint (`LightenAndFade`, blend 35% toward white, alpha
-   ~55%) so they read as "the extra bands" rather than an unrelated colour. Compiles clean;
-   negative controls (silence, sustained tone) still hold at zero across all nine bands. **Not
-   yet watched live** — a screenshot pass was queued when the second item below interrupted it.
-2. **A real bug, reported by the user and reproduced under controlled conditions: BEAT fired
-   twice per sound, once at the start and once at the end.** Root cause confirmed with a
-   synthetic tone that stops abruptly (attack + sustain + hard cut, no release taper): the FFT
-   frame straddling real signal and true digital silence leaks energy across every bin at once —
-   at the exact moment of cutoff, *every* band spiked simultaneously (`band1` measured
-   `ratio_avg=69.7`, `ratio_prev=241.7`), reading exactly like a broadband onset. The tell: the
-   very next frame reads a **literal `0.000`**, which no real sound, however fast its decay, ever
-   produces. Fix: each detected rise is now held as a candidate for one extra analyzer frame
-   (~85 ms, not visually perceptible) and only actually pulses if the following frame's energy
-   clears `BeatClickRejectFloor = 0.03` — comfortably above true silence, comfortably below any
-   real decay. Compiles clean. **Not cleanly verified yet** — every attempt to re-run the negative
-   controls this session was contaminated by a live Discord call (see the new technique below);
-   the fix needs a quiet re-run before it can be called done, and neither change has been
-   committed.
+1. **The double-fire bug is fixed.** Reported by the user as "reacts at the start and the end of
+   the sound"; reproduced with a tone that stops abruptly instead of decaying — the FFT frame
+   straddling real signal and true digital silence leaks energy across every bin at once, so every
+   band spiked simultaneously at the moment of cutoff (`band1` measured `ratio_avg=69.7`), reading
+   exactly like a broadband onset. The tell: the very next frame reads a literal `0.000`, which no
+   real sound ever produces immediately after a hit. Each detected rise is now held as a candidate
+   for one extra analyzer frame (~85 ms) and only pulses if the following frame clears
+   `BeatClickRejectFloor = 0.03`. Verified clean: silence and a sustained tone both hold at zero;
+   the abrupt-stop click is now actively rejected (not just absent — `rejected clicks: [2,1,0,1,1,
+   0,0,0,0]` on the reproduction case) rather than firing.
+   **One real caveat surfaced and resolved during testing, worth knowing if this ever needs
+   revisiting:** a kick+hihat mix using a **pure 8 kHz sine** as the hihat proxy showed the top
+   three bands rejecting every hit — looked exactly like a regression. Swapping to band-limited
+   *noise* (a real cymbal is broadband, not one tone) made it disappear completely, 0 rejections,
+   full detection. A pure tone concentrates almost all its energy in one FFT bin, so once that bin
+   fades even slightly the whole band's averaged energy can hit a literal zero — a real broadband
+   hit spreads across many bins and never does. **Not a flaw in the fix; a limitation of testing
+   percussion with a single sine wave.** If BEAT ever seems to miss real cymbals/hi-hats, don't
+   assume this fix is the cause without checking against real (broadband) audio first.
+2. **Nine beat bands instead of five**, by request: the original five kept, with one interleaved
+   between each pair (`BeatBandBounds = {0,13,21,29,37,45,53,61,69,80}`), each interleaved band
+   tinted lighter and partly transparent (`LightenAndFade`, 35% toward white, ~55% alpha) so it
+   reads as "the extra band" rather than an unrelated hue. Confirmed live — a zoomed screenshot
+   during playback shows the tinted band's cluster reading visibly greyer/more muted than the
+   two full-colour clusters either side of it, the alternating pattern by design.
 
 **BEAT mode is done and verified live, not just offline.** Five independent frequency bands
 (~20-80 Hz / 80-300 Hz / 300 Hz-2 kHz / 2-6 kHz / 6-20 kHz), each with its own onset detector and
@@ -495,9 +501,9 @@ Then rebuild installer from `dist/`:
 
 | Issue | State |
 |---|---|
-| **BEAT fired twice per sound** — once on real onset, once on an abrupt stop's spectral-leakage click, indistinguishable from a real hit by threshold/rise alone | **Fix written** (one-frame candidate hold + `BeatClickRejectFloor`), compiles, **not committed, not cleanly verified** — every attempt this session was contaminated by a live Discord call. Needs a quiet re-run of the negative controls, then commit |
-| **Nine beat bands with a tinted interleave, added by request** — the original five plus one between each pair, tinted lighter/partly transparent | **Written, compiles, negative controls pass** (silence/tone hold at zero across all nine bands). **Not committed, not watched live** — queued for a screenshot pass when the bug above was reported instead |
-| **Seven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, plus the two above once committed) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, BEAT mode + persistence, the click fix, 9-band tinting. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
+| BEAT fired twice per sound — once on real onset, once on an abrupt stop's spectral-leakage click | Fixed (`f4af92a`): one-frame candidate hold + `BeatClickRejectFloor`. Verified clean (quiet endpoint confirmed first): silence/tone hold at zero, the click is actively rejected. Caveat: a pure-tone percussion proxy can look like a false rejection — use broadband noise when testing this, see "Start here" |
+| Nine beat bands with a tinted interleave, added by request | Fixed (`f4af92a`). Negative controls clean across all nine bands; tint confirmed live (zoomed screenshot shows the alternating muted/full-colour pattern) |
+| **Seven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`) — uninstall unbypass, single instance, scroll reset, Bass Boost preset, visualizer scaling fix, BEAT mode + persistence, the click fix + 9-band tinting. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open.** Needs a version bump, publish, `makensis`, release |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | **The playback EQ is applied to every device EqualizerAPO is attached to, microphones included** | **Open, and the worst one left.** `BuildConfig`/`BuildPerEarConfig` emit a flat `config.txt` with no `Device:` lines, so ticking a mic in the Configurator puts the +7 dB 4 kHz footstep boost on the user's voice. Fixing it is also what unblocks mic EQ — see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
