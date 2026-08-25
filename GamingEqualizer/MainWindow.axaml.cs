@@ -77,29 +77,44 @@ public partial class MainWindow : Window
 
     // Onset detection runs per frequency band rather than on the kick band alone, so a snare,
     // a hi-hat or a synth stab each pulse their own slice of the row instead of everything
-    // riding on the bass alone. Boundaries are bar indices into the analyzer's 80 log-spaced
-    // bars (20 Hz-20 kHz): {0,16,31,53,65,80} works out to roughly 20-80 Hz (kick/sub) /
-    // 80-300 Hz (bass) / 300 Hz-2 kHz (mid, vocals/snare body) / 2-6 kHz (presence) /
-    // 6-20 kHz (air, hats/cymbals). Bars are ~85 ms apart (4096 samples at 48 kHz), so a beat
-    // lands within about a frame of the real one — fine for a visual pulse.
-    private static readonly int[]    BeatBandBounds = { 0, 16, 31, 53, 65, VizBars };
+    // riding on the bass alone. Nine bands: the original five (kick/bass/mid/presence/treble)
+    // with one extra band interleaved between each pair, roughly doubling frequency resolution.
+    // Boundaries are bar indices into the analyzer's 80 log-spaced bars (20 Hz-20 kHz):
+    // {0,13,21,29,37,45,53,61,69,80} sits close to 20/60/120/250/500/1000/2000/4000/8000/20000 Hz.
+    // Bars are ~85 ms apart (4096 samples at 48 kHz), so a beat lands within about a frame of
+    // the real one — fine for a visual pulse.
+    private static readonly int[]    BeatBandBounds = { 0, 13, 21, 29, 37, 45, 53, 61, 69, VizBars };
     private static readonly int      BeatBandCount  = BeatBandBounds.Length - 1;
     // Bass sustains into a boomy decay; treble is a short tick. One rate per band reads more
     // like the actual instruments than a single shared decay would.
-    private static readonly double[] BeatBandDecay  = { 0.94, 0.92, 0.90, 0.88, 0.85 };
+    private static readonly double[] BeatBandDecay  = { 0.94, 0.93, 0.92, 0.91, 0.90, 0.89, 0.88, 0.87, 0.85 };
+    // The interleaved (even-index-gap) bands get a lighter tint and partial alpha in
+    // PositionVizBars so they read as the "extra" bands sitting between the original five.
+    private static readonly bool[]   BeatBandInterleaved = { false, true, false, true, false, true, false, true, false };
 
-    private const int    BeatHistoryFrames = 18;     // ~1.5 s of context
-    private const double BeatThreshold     = 1.25;   // energy must exceed this × the local average
-    private const double BeatFloor         = 0.6;    // ignore near-silence
-    private const double BeatRefractoryMs  = 200;    // caps at ~300 BPM per band, stops double triggers
-    private const double BeatRise          = 1.15;   // must be climbing, not merely loud
+    private const int    BeatHistoryFrames  = 18;    // ~1.5 s of context
+    private const double BeatThreshold      = 1.25;  // energy must exceed this × the local average
+    private const double BeatFloor          = 0.6;   // ignore near-silence
+    private const double BeatRefractoryMs   = 200;   // caps at ~300 BPM per band, stops double triggers
+    private const double BeatRise           = 1.15;  // must be climbing, not merely loud
+    // A hard, instantaneous stop (a track cut, a sample with a clipped release) makes an FFT
+    // frame straddle real signal and true digital silence, and that discontinuity leaks energy
+    // across every bin — every band spikes at once and looks exactly like a broadband onset,
+    // then the very next frame reads a literal 0.000. A real sound, even decaying fast, never
+    // produces an exact zero on the frame right after a hit. So a detected rise is held for one
+    // extra frame (~85 ms, not perceptible) and only actually pulses if the following frame's
+    // energy clears this — comfortably above true silence, comfortably below anything a real,
+    // if quiet, decay would leave behind.
+    private const double BeatClickRejectFloor = 0.03;
 
-    private readonly double[][]  _beatHistory      = InitBandArrays(BeatBandCount, BeatHistoryFrames);
-    private readonly int[]       _beatHistoryCount = new int[BeatBandCount];
-    private readonly int[]       _beatHistoryPos   = new int[BeatBandCount];
-    private readonly double[]    _beatPrevEnergy   = new double[BeatBandCount];
-    private readonly DateTime[]  _lastBeatAt       = InitDates(BeatBandCount);
-    private readonly double[]    _beatPulse        = new double[BeatBandCount];   // 0-1 per band, decayed every tick
+    private readonly double[][]  _beatHistory          = InitBandArrays(BeatBandCount, BeatHistoryFrames);
+    private readonly int[]       _beatHistoryCount     = new int[BeatBandCount];
+    private readonly int[]       _beatHistoryPos       = new int[BeatBandCount];
+    private readonly double[]    _beatPrevEnergy       = new double[BeatBandCount];
+    private readonly DateTime[]  _lastBeatAt           = InitDates(BeatBandCount);
+    private readonly double[]    _beatPulse            = new double[BeatBandCount];   // 0-1 per band, decayed every tick
+    private readonly bool[]      _beatCandidatePending = new bool[BeatBandCount];
+    private readonly double[]    _beatCandidateStrength = new double[BeatBandCount];
 
     private static double[][] InitBandArrays(int bands, int frames)
     {
@@ -237,6 +252,17 @@ public partial class MainWindow : Window
             2 => PeakGlowColor(intensity, t),
             _ => BandColor(t)
         };
+    }
+
+    /// <summary>Blends a colour toward white and lowers its alpha — used to mark the
+    /// interleaved beat bands as "a lighter, dimmer version of the same colour" regardless
+    /// of which of the three viz colour modes is active.</summary>
+    private static Color LightenAndFade(Color c, double amount, double alpha)
+    {
+        byte r = (byte)(c.R + (255 - c.R) * amount);
+        byte g = (byte)(c.G + (255 - c.G) * amount);
+        byte b = (byte)(c.B + (255 - c.B) * amount);
+        return Color.FromArgb((byte)(255 * alpha), r, g, b);
     }
 
     private static Color PeakGlowColor(double intensity, double t)
@@ -1441,11 +1467,21 @@ public partial class MainWindow : Window
                 Canvas.SetLeft(_vizBars[j], x);
                 Canvas.SetTop(_vizBars[j], y);
 
-                if (_settings.VizColorMode == 2)
+                bool recolor = _settings.VizColorMode == 2 || _beatMode;
+                if (recolor)
                 {
                     double t = j / (double)(VizBars - 1);
                     double intensity = Math.Abs(_vizCurrent[j]) / 12.0;
-                    _vizBrushes[j].Color = VizBarColor(j, intensity, t);
+                    Color color = VizBarColor(j, intensity, t);
+
+                    // The four interleaved beat bands (between the original five) get a
+                    // lighter, partly transparent version of the same colour rather than an
+                    // unrelated hue, so they read as "the extra bands" without breaking the
+                    // row's existing gradient/solid/peak-glow palette.
+                    if (_beatMode && BeatBandInterleaved[BandForBar(j)])
+                        color = LightenAndFade(color, amount: 0.35, alpha: 0.55);
+
+                    _vizBrushes[j].Color = color;
                 }
             }
 
@@ -2108,6 +2144,20 @@ public partial class MainWindow : Window
 
     private void DetectBandBeat(int band, double energy)
     {
+        // Resolve whatever last frame flagged as a possible onset, using this frame's energy —
+        // this is the one-frame hold described above the constants. A literal collapse to true
+        // silence means last frame was a click, not a hit; anything else confirms it.
+        if (_beatCandidatePending[band])
+        {
+            _beatCandidatePending[band] = false;
+            if (energy > BeatClickRejectFloor &&
+                (DateTime.UtcNow - _lastBeatAt[band]).TotalMilliseconds >= BeatRefractoryMs)
+            {
+                _lastBeatAt[band] = DateTime.UtcNow;
+                _beatPulse[band]  = Math.Max(_beatPulse[band], _beatCandidateStrength[band]);
+            }
+        }
+
         double average = 0;
         if (_beatHistoryCount[band] > 0)
         {
@@ -2133,11 +2183,9 @@ public partial class MainWindow : Window
         // second in testing. A real onset is a jump from the frame before it.
         if (energy < previous * BeatRise) return;
 
-        if ((DateTime.UtcNow - _lastBeatAt[band]).TotalMilliseconds < BeatRefractoryMs) return;
-
-        _lastBeatAt[band] = DateTime.UtcNow;
-        double strength = Math.Clamp((energy / Math.Max(average, 0.0001) - 1.0) / 1.5, 0.35, 1.0);
-        _beatPulse[band] = Math.Max(_beatPulse[band], strength);
+        // Not fired yet — see the resolve step above and the comment by BeatClickRejectFloor.
+        _beatCandidatePending[band]  = true;
+        _beatCandidateStrength[band] = Math.Clamp((energy / Math.Max(average, 0.0001) - 1.0) / 1.5, 0.35, 1.0);
     }
 
     /// <summary>Which beat band a visualizer bar index falls into.</summary>
@@ -2158,6 +2206,8 @@ public partial class MainWindow : Window
             _beatPrevEnergy[b]   = 0;
             _beatPulse[b]        = 0;
             _lastBeatAt[b]       = DateTime.MinValue;
+            _beatCandidatePending[b]  = false;
+            _beatCandidateStrength[b] = 0;
         }
     }
 }
