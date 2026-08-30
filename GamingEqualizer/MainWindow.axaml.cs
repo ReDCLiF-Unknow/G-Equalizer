@@ -227,6 +227,7 @@ public partial class MainWindow : Window
         RefreshAutoPresetTimer();
 
         CheckEqBackendHealth();
+        StartEqHealthTimer();
 
         if (OperatingSystem.IsWindows())
         {
@@ -257,6 +258,7 @@ public partial class MainWindow : Window
     {
         if (_hwnd != IntPtr.Zero) HotkeyManager.Unregister(_hwnd);
         _autoPresetTimer?.Stop();
+        _eqHealthTimer?.Stop();
 
         // Same reasoning as StopAnalyzerIfIdle: Dispose() fires RecordingStopped synchronously,
         // and without this flag HandleAnalyzerStopped would see AudioDriven still true (this
@@ -1271,6 +1273,27 @@ public partial class MainWindow : Window
     /// Warn about that instead of silently doing nothing. Controls stay enabled — the config
     /// is still written correctly and starts working as soon as the user fixes the hookup.
     /// </summary>
+    /// <summary>
+    /// Re-checks periodically, not just at startup. EqualizerAPO can come detached from a device
+    /// while the app is running — a headset re-enumerating is enough, and it has happened twice on
+    /// the dev machine — and the symptom is simply that the EQ stops affecting anything. Checked
+    /// once at launch, that reads as "G-EQ is broken" with no warning anywhere.
+    ///
+    /// Measured at ~2.7 ms per call, so it is safe on the UI thread; the device *enumeration* in
+    /// EQConfigWriter is the expensive one (~418 ms) and is cached separately.
+    /// </summary>
+    private const double EqHealthCheckSeconds = 15;
+    private DispatcherTimer? _eqHealthTimer;
+    private bool             _apoWarningShown;
+
+    private void StartEqHealthTimer()
+    {
+        if (_eqHealthTimer != null) return;   // OnOpened re-fires on a tray restore
+        _eqHealthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(EqHealthCheckSeconds) };
+        _eqHealthTimer.Tick += (_, _) => CheckEqBackendHealth();
+        _eqHealthTimer.Start();
+    }
+
     private void CheckEqBackendHealth()
     {
         if (!_backend.IsAvailable)
@@ -1281,15 +1304,23 @@ public partial class MainWindow : Window
 
         if (!OperatingSystem.IsWindows()) return;
 
-        switch (EqApoDiagnostics.GetStatus())
+        bool detached = EqApoDiagnostics.GetStatus() == EqApoStatus.NotAttached;
+
+        // Only act on a change, so a repeating check neither re-shows a banner the user has
+        // moved past nor keeps overwriting whatever else is on screen every 15 seconds.
+        if (detached && !_apoWarningShown)
         {
-            case EqApoStatus.NotAttached:
-                ShowErrorBanner(
-                    "EqualizerAPO is installed but is not active on your current playback device, " +
-                    "so the EQ will not change what you hear. Open " +
-                    "C:\\Program Files\\EqualizerAPO\\Configurator.exe, tick that device, then reboot. " +
-                    "If it still has no effect, also enable \"Install as SFX/EFX\" under Troubleshooting.");
-                break;
+            _apoWarningShown = true;
+            ShowErrorBanner(
+                "EqualizerAPO is installed but is not active on your current playback device, " +
+                "so the EQ will not change what you hear. Open " +
+                "C:\\Program Files\\EqualizerAPO\\Configurator.exe, tick that device, then reboot. " +
+                "If it still has no effect, also enable \"Install as SFX/EFX\" under Troubleshooting.");
+        }
+        else if (!detached && _apoWarningShown)
+        {
+            _apoWarningShown = false;
+            HideErrorBanner();
         }
     }
 
