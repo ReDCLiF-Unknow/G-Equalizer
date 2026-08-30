@@ -1,6 +1,38 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-25)
+## ⏭️ Start here (2026-08-30)
+
+**The EQ is confirmed audible for the first time.** See item 1 of "Carried over" below for the
+full chain — the short version is that four things had to be right simultaneously and the last
+one, EqualizerAPO actually being attached to the playback device, is not something the app
+controls.
+
+**A lag regression was introduced and fixed the same day** (`4fae6d0`). The `Device:` scoping in
+`d944e1a` enumerated audio endpoints on every EQ apply; that call measures **~418 ms** on this
+hardware and ran synchronously on the UI thread, so every preset click froze the app for half a
+second. Now cached (0.18 ms on subsequent applies), refreshed off-thread on a 30s TTL, and
+invalidated by `HandleAnalyzerStopped` since that already fires on device changes. **The lesson,
+having got this wrong once: measure any audio-device call before putting it on a UI path.** For
+reference, `EqApoDiagnostics.GetStatus()` is ~2.7 ms and endpoint *enumeration* is ~418 ms — they
+are not remotely comparable, despite both looking like "ask Windows about audio devices".
+
+**APO attachment is now polled every 15s** (`b34a77b`), not just checked in `OnOpened`. It had
+detached mid-session, and with a launch-only check the symptom was silence with no warning
+anywhere — indistinguishable from the app being broken. The banner is raised on the transition
+into the detached state and cleared on the transition out; both directions were observed live.
+
+**Correction, so it is not repeated:** an earlier attempt to inspect APO registration read
+`HKLM\SYSTEM\CurrentControlSet\Control\MMDevices\...`, concluded the `FxProperties` key was
+missing, and presented that as evidence the APO was detached. **That path is wrong.** The real one
+— the one `EqApoDiagnostics.FindEqApoSlots` uses — is
+`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{endpoint}\FxProperties`.
+The conclusion happened to be right, but only because `GetStatus()` independently said
+`NotAttached`; the registry dump was noise dressed up as corroboration. Read that key at the
+correct path or just trust `GetStatus()`.
+
+---
+
+## Start here (2026-08-25)
 
 **Two audio-correctness fixes landed that change what users actually hear. Neither has shipped.**
 These matter more than anything else outstanding, and both were found by reading code rather than
@@ -270,10 +302,19 @@ independently making the app feel broken:
 
 **Carried over, roughly in priority order:**
 
-1. **Nobody has confirmed the EQ is actually audible.** Still true, and now with a fresh
-   EqualizerAPO install behind it — attachment to the playback device was **not** re-verified on
-   2026-08-15. `config.txt` currently holds only `Preamp: 0 dB` because `EqEnabled` is `false`.
-   **Ask the user to confirm by ear**; it cannot be verified from inside a session.
+1. ~~**Nobody has confirmed the EQ is actually audible.**~~ **CONFIRMED AUDIBLE 2026-08-30** — the
+   user reported "it works now, sound changes" with the PUBG preset while toggling ENABLE. This
+   was the oldest open item in this document and it is closed.
+   **Four things all had to be right at once, and each had been wrong at some point:** the config
+   had to contain real filters (`EqEnabled` was `false`), in a number format EqualizerAPO can
+   parse (it was writing commas on this `en-DE` box — `a325dc2`), scoped to the playback device
+   (`d944e1a`), *and* EqualizerAPO had to actually be attached to that device. That last one is
+   not a code condition and was the final blocker: `EqApoDiagnostics` reported `NotAttached`, the
+   user ticked the device in `Configurator.exe` and rebooted, and it flipped to `Ok`.
+   **If "the EQ does nothing" is ever reported again, check attachment first** — it is the only
+   part of the chain outside the app's control, and it has now come detached at least twice
+   (2026-08-07 and 2026-08-30). The app now polls for it (see below) instead of only checking at
+   launch, so it should announce itself rather than looking like a G-EQ bug.
 2. **Comparison videos still owed** — see the Website section.
 3. **macOS/Linux are stranded on 3.0.0** — three releases behind, still pre-rebrand, still
    unverified on real hardware. The website deliberately points those two cards at the v3.0.0
@@ -575,7 +616,7 @@ Then rebuild installer from `dist/`:
 |---|---|
 | BEAT fired twice per sound — once on real onset, once on an abrupt stop's spectral-leakage click | Fixed (`f4af92a`): one-frame candidate hold + `BeatClickRejectFloor`. Verified clean (quiet endpoint confirmed first): silence/tone hold at zero, the click is actively rejected. Caveat: a pure-tone percussion proxy can look like a false rejection — use broadband noise when testing this, see "Start here" |
 | Nine beat bands with a tinted interleave, added by request | Fixed (`f4af92a`). Negative controls clean across all nine bands; tint confirmed live (zoomed screenshot shows the alternating muted/full-colour pattern) |
-| **Eleven code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`) — including two that change what users hear: the mic-EQ scoping and the locale/decimal fix. No 3.0.4 build exists; the published 3.0.3 has none of them | **Open, and now the highest-value item.** Needs a version bump, publish, `makensis`, release |
+| **Thirteen code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`, `4fae6d0`, `b34a77b`) — including the mic-EQ scoping and the locale/decimal fix, which are part of why the EQ is now audible at all. The published 3.0.3 has none of them | **Open, and the highest-value item by a wide margin.** Needs a version bump, publish, `makensis`, release |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | The playback EQ was applied to every device EqualizerAPO is attached to, microphones included | Fixed (`d944e1a`) — `Device:` scoping verified on hardware against both endpoints of the same headset. This also unblocks mic EQ, since `Device:`-scoped sections were the missing piece: see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
