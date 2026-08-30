@@ -1,5 +1,6 @@
 #pragma warning disable CA1416 // Windows-only; device enumeration is guarded by OperatingSystem.IsWindows()
 
+using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
 
 namespace GamingEqualizer;
@@ -122,10 +123,53 @@ public class EQConfigWriter
             lines.Add("Device: all");
     }
 
+    // Enumerating endpoints costs ~400ms on real hardware, and this runs on the UI thread for
+    // every EQ apply — every preset click and every slider move. Uncached, that froze the app
+    // for half a second per change. The device list almost never changes, so it is computed
+    // once, reused, and refreshed off-thread when stale or when something signals a change.
+    private static readonly TimeSpan ScopeCacheTtl = TimeSpan.FromSeconds(30);
+    private static string?  _cachedScopeLine;
+    private static DateTime _scopeCachedAt = DateTime.MinValue;
+    private static int      _scopeRefreshing;   // 0/1, guards against piling up refreshes
+
+    /// <summary>Drops the cached device list so the next write re-reads it. Called when
+    /// something has already observed a device change, so the 30s TTL is not the only path.</summary>
+    public static void InvalidateDeviceScopeCache() => _scopeCachedAt = DateTime.MinValue;
+
     private static string? RenderDeviceScopeLine()
     {
         if (!OperatingSystem.IsWindows()) return null;
 
+        // First use has to be correct before anything is written, so pay the cost here rather
+        // than writing one unscoped config (which is exactly the microphone bug) while a
+        // background read completes.
+        if (_scopeCachedAt == DateTime.MinValue)
+        {
+            _cachedScopeLine = ComputeRenderDeviceScopeLine();
+            _scopeCachedAt   = DateTime.UtcNow;
+            return _cachedScopeLine;
+        }
+
+        if (DateTime.UtcNow - _scopeCachedAt > ScopeCacheTtl &&
+            Interlocked.CompareExchange(ref _scopeRefreshing, 1, 0) == 0)
+        {
+            // Serve the cached value now; fold the new one in whenever it arrives.
+            Task.Run(() =>
+            {
+                try
+                {
+                    _cachedScopeLine = ComputeRenderDeviceScopeLine();
+                    _scopeCachedAt   = DateTime.UtcNow;
+                }
+                finally { Volatile.Write(ref _scopeRefreshing, 0); }
+            });
+        }
+
+        return _cachedScopeLine;
+    }
+
+    private static string? ComputeRenderDeviceScopeLine()
+    {
         try
         {
             using var enumerator = new MMDeviceEnumerator();

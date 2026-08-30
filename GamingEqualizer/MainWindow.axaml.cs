@@ -2354,6 +2354,11 @@ public partial class MainWindow : Window
 
         Logger.Log($"Audio capture stopped unexpectedly (device change?): {ex?.Message ?? "no exception"}");
 
+        // Most likely cause is the default device changing, which is exactly what the config's
+        // Device: scoping is built from — drop the cached list so the next write re-reads it
+        // rather than waiting out the TTL.
+        EQConfigWriter.InvalidateDeviceScopeCache();
+
         _spectrum?.Dispose();
         _spectrum = null;
 
