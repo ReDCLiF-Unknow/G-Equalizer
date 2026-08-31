@@ -16,6 +16,14 @@ presets (now 7 with Bass Boost) and describes the visualizer as "80-bar WASAPI l
 with FFT", with nothing about BEAT mode, the contour wave, or NEON. All real, all unreleased, so
 none of it can honestly go on the page until 3.0.4 exists.
 
+**Machine state as of 2026-08-30, so none of it has to be re-derived:** the installed copy in
+`Program Files` is **3.0.3** (fourteen commits behind); the only desktop shortcut is
+`G-EQ (latest build).lnk` pointing at `bin\Debug`; **autostart is currently off** —
+`LaunchWithWindows` is `false` and no `GamingEqualizer` scheduled task is registered, so nothing
+starts at logon right now. EqualizerAPO **is** attached and working after the 2026-08-30 reboot.
+The dev box has .NET SDK 10.0.400, Node v22.23.2, NSIS, `gh`, and ffmpeg — everything a build,
+a release, or a video re-encode needs.
+
 **The EQ is confirmed audible for the first time.** See item 1 of "Carried over" below for the
 full chain — the short version is that four things had to be right simultaneously and the last
 one, EqualizerAPO actually being attached to the playback device, is not something the app
@@ -837,7 +845,7 @@ Scheduler. If elevation is ever dropped, a plain Run value would work again and
 - **Comparison section auto-detects missing videos:** `src/components/Compare.astro` checks at *build time* (`fs.existsSync` against `public/media/eq-off.mp4` / `eq-on.mp4`) whether the clips exist. If not, it renders a dashed "Coming soon" placeholder card instead of a `<video>` element, and hides the "▶ Play both" button entirely. **The user still owes these two clips** — same recording matched as closely as possible, EQ off vs. the PUBG preset on (copy was deliberately worded "recorded to match as closely as possible" rather than "the same recording," since they'll be separate takes, not one file). Once dropped into `website/public/media/` with those exact filenames and pushed, the next deploy switches to real players automatically — no code change needed. **Remind the user if this comes up idle for a while.**
 - **Download links are real:** Windows card links straight to the `G-EQ-Setup-3.0.0.exe` release asset; Linux links straight to the tarball; macOS links to the release page itself (since there are two arch variants, arm64/x64, and picking one for the user would be a guess). Footer "GitHub →" links to the now-public repo.
 - **Not decided yet:** custom domain name, whether to add a changelog/blog page later.
-- **Housekeeping:** the old pre-rebrand `dist/GEqualizer-Setup-3.0.0.exe` (superseded by `dist/G-EQ-Setup-3.0.0.exe`) was deleted from disk at the user's request. NSIS and the GitHub CLI (`gh`) were installed on this dev machine via `winget` this session (both were missing, needed `gh auth login --web` device-code flow since no token existed); the NSIS `inetc` plugin is now vendored at `dist/nsis-plugins/x86-unicode/INetC.dll` and wired in via `!addplugindir` in `installer.nsi`, so the installer can be rebuilt without writing to `Program Files`. A desktop shortcut (`G-EQ.lnk`, Desktop) now points at the Debug build exe for quick local launches — note it'll trigger a UAC prompt every time since `app.manifest` is `requireAdministrator`.
+- **Housekeeping:** the old pre-rebrand `dist/GEqualizer-Setup-3.0.0.exe` (superseded by `dist/G-EQ-Setup-3.0.0.exe`) was deleted from disk at the user's request. NSIS and the GitHub CLI (`gh`) were installed on this dev machine via `winget` this session (both were missing, needed `gh auth login --web` device-code flow since no token existed); the NSIS `inetc` plugin is now vendored at `dist/nsis-plugins/x86-unicode/INetC.dll` and wired in via `!addplugindir` in `installer.nsi`, so the installer can be rebuilt without writing to `Program Files`. A desktop shortcut now points at the Debug build exe for quick local launches — note it'll trigger a UAC prompt every time since `app.manifest` is `requireAdministrator`. **Updated 2026-08-30:** that shortcut is now named `G-EQ (latest build).lnk`, deliberately distinct from the `G-EQ` name the installer uses, so the two cannot collide. It points at `bin\Debug\net10.0\GamingEqualizer.exe`, which means it launches whatever was last compiled and breaks `dotnet build` with a file lock while running — fine for trying things, not a substitute for installing.
 
 ---
 
