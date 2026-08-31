@@ -2,6 +2,20 @@
 
 ## ⏭️ Start here (2026-08-30)
 
+**Cut 3.0.4. It is the highest-value thing left, and the website now depends on it.**
+Fourteen code commits sit on `main` ahead of the published 3.0.3, including two fixes that change
+what users hear (mic-EQ scoping, the locale/decimal fix) and the repair that makes the LIVE
+visualizer work at all. **The site advertises that visualizer while linking to the build where it
+renders permanently blank** — the double-normalisation bug in `82efc1b` meant every bar computed
+to exactly `0.000` at any volume. Shipping fixes that page without editing a word of copy.
+Only 2 people have downloaded 3.0.3 (per the GitHub API), so the exposure is small — but it is
+also why there is no reason to delay.
+
+**After shipping, the Specs copy is out of date in the other direction:** it says "6+ built-in"
+presets (now 7 with Bass Boost) and describes the visualizer as "80-bar WASAPI loopback capture
+with FFT", with nothing about BEAT mode, the contour wave, or NEON. All real, all unreleased, so
+none of it can honestly go on the page until 3.0.4 exists.
+
 **The EQ is confirmed audible for the first time.** See item 1 of "Carried over" below for the
 full chain — the short version is that four things had to be right simultaneously and the last
 one, EqualizerAPO actually being attached to the playback device, is not something the app
@@ -315,7 +329,8 @@ independently making the app feel broken:
    part of the chain outside the app's control, and it has now come detached at least twice
    (2026-08-07 and 2026-08-30). The app now polls for it (see below) instead of only checking at
    launch, so it should announce itself rather than looking like a G-EQ bug.
-2. **Comparison videos still owed** — see the Website section.
+2. ~~**Comparison videos still owed**~~ **DONE 2026-08-30** (`9b91ed0`, `d552e0f`) — live on the
+   site. See the Website section for how they were identified and encoded.
 3. **macOS/Linux are stranded on 3.0.0** — three releases behind, still pre-rebrand, still
    unverified on real hardware. The website deliberately points those two cards at the v3.0.0
    assets, which is why **v3.0.0 must not be deleted**.
@@ -616,11 +631,11 @@ Then rebuild installer from `dist/`:
 |---|---|
 | BEAT fired twice per sound — once on real onset, once on an abrupt stop's spectral-leakage click | Fixed (`f4af92a`): one-frame candidate hold + `BeatClickRejectFloor`. Verified clean (quiet endpoint confirmed first): silence/tone hold at zero, the click is actively rejected. Caveat: a pure-tone percussion proxy can look like a false rejection — use broadband noise when testing this, see "Start here" |
 | Nine beat bands with a tinted interleave, added by request | Fixed (`f4af92a`). Negative controls clean across all nine bands; tint confirmed live (zoomed screenshot shows the alternating muted/full-colour pattern) |
-| **Thirteen code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`, `4fae6d0`, `b34a77b`) — including the mic-EQ scoping and the locale/decimal fix, which are part of why the EQ is now audible at all. The published 3.0.3 has none of them | **Open, and the highest-value item by a wide margin.** Needs a version bump, publish, `makensis`, release |
+| **Fourteen code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`, `4fae6d0`, `b34a77b`, plus the visualizer fix) — including the mic-EQ scoping and the locale/decimal fix, which are part of why the EQ is audible at all, and the repair that makes the LIVE visualizer render anything. The published 3.0.3 has none of them, and the website advertises the broken visualizer | **Open, and the highest-value item.** Version bump, publish, `makensis`, tag, release |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | The playback EQ was applied to every device EqualizerAPO is attached to, microphones included | Fixed (`d944e1a`) — `Device:` scoping verified on hardware against both endpoints of the same headset. This also unblocks mic EQ, since `Device:`-scoped sections were the missing piece: see "Microphone EQ" below |
 | **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
-| **Node 20.9.0 cannot build the website** (Astro needs ≥22.12.0) — no dev server, so visual changes ship unverified | **Open.** CI uses Node 22 so deploys are fine; worth fixing before the comparison videos land |
+| Node could not build the website (Astro needs ≥22.12.0) | Fixed — the machine now has **Node v22.23.2**, and the site builds and previews locally. One gotcha: `node_modules` still held Node 20 native bindings, so `astro build` died on a missing `rolldown-binding.win32-x64-msvc.node` until `npm ci` reinstalled them. **ffmpeg is also installed now** (`winget install Gyan.FFmpeg`), so video work needs no setup |
 | `ResetAccent_Click` toggled `_suppressSettings` with no `try`/`finally` | Fixed (`89345cf`) — a throw there would have silently deadened the whole Settings panel until restart, the same shape as the `PopulateSettingsPanel` bug |
 | Auto-preset switching ended in a bare `catch { }` | Fixed (`89345cf`) — now logged, deliberately not banner'd, since it ticks every 2 s. **Still open:** `BypassAndQuit` swallows a failed bypass (quitting can leave the EQ applied), and APO health is only checked in `OnOpened` so a mid-session detach goes unreported |
 | Uninstalling left the EQ applied forever — the uninstaller never reset EqualizerAPO's `config.txt` | Fixed (`06ada69`), NSIS compiles; **not yet exercised by a real uninstall** |
@@ -796,6 +811,26 @@ Scheduler. If elevation is ever dropped, a plain Run value would work again and
 - **Live at:** https://redclif-unknow.github.io/G-Equalizer/ — GitHub Pages, deployed via `.github/workflows/deploy-website.yml` (build + `actions/deploy-pages`), triggered automatically on every push to `main` that touches `website/**`. Enabled via `gh api -X POST repos/.../pages -f build_type=workflow`. Was briefly disabled and re-enabled mid-session at the user's request (`gh api -X DELETE .../pages` / re-`POST`) — no config changes needed either time, it's a pure on/off toggle.
 - **Location:** `website/` — a real Astro project now (was a single static `index.html`; converted this session). `src/layouts/Layout.astro` + `src/components/{Nav,Hero,Specs,Demo,Compare,Download,Footer}.astro`, composed in `src/pages/index.astro`. Styling is Tailwind v4 (`@tailwindcss/vite`), with the original CSS custom properties (`--bg`, `--accent`, etc., dark by default, `[data-theme="light"]` override) mapped into Tailwind's theme via `@theme inline` in `src/styles/global.css` — so utilities like `bg-accent`/`text-text-dim`/`border-line` work directly. `npm run dev` (port 4321) / `npm run build` (→ `website/dist/`, gitignored).
 - **Base path gotcha:** `astro.config.mjs` sets `site`/`base: '/G-Equalizer/'` for the project-page URL. Any hardcoded absolute path (favicon, video `src`, anything starting with `/`) must be prefixed with `import.meta.env.BASE_URL` (which already includes the trailing slash) or it 404s once deployed — this bit us once with the favicon (`/G-Equalizerfavicon.ico`, missing separator) before the base was given its own trailing slash. When running the dev server locally, the site is at `http://localhost:4321/G-Equalizer/`, not the bare root.
+- **Comparison clips are live as of 2026-08-30** (`9b91ed0`, `d552e0f`). `Compare.astro` checks for
+  `public/media/eq-off.mp4` and `eq-on.mp4` at build time and swaps the "Coming soon" placeholders
+  for real players, so adding them was purely a matter of dropping the two files in.
+  **Which clip was which was decided by measurement, not by filename or by ear:** averaging each
+  clip's spectrum across its whole length and normalising to its own mean (so the EQ's -6 dB
+  preamp could not pass as a tonal difference), the difference between them tracks the PUBG preset
+  curve at **r = 0.965** — deepest cut at 64 Hz, peak at 4 kHz, rolling off at 8k and 16k, exactly
+  where the preset puts them. The tool that did it is disposable but the method is worth repeating
+  if more clips are ever added.
+  **Encoding:** sources were 1080p120 at 20 Mbps (screen-capture settings). Re-encoded to 720p30,
+  x264 `crf 28 -preset slow`, `+faststart`, **audio deliberately kept at 160k AAC** because the
+  whole point of the clips is that the difference stays audible — 77 MB down to 1.5 MB for the
+  pair. The spectral comparison was then **re-run on the encoded files** to prove the difference
+  survived: every band within ~0.5 dB of the original, tilt unchanged. Do that check again if
+  these are ever re-encoded.
+  **The copy was corrected at the same time.** It claimed "only the EQ differs", which the
+  measurement contradicts: the clips are separate takes (14.9s vs 17.1s) and the difference between
+  them is roughly 5x larger than the preset alone can produce, so some of what a visitor hears is
+  different gunfire and footsteps. Same map and room, so it is still a fair comparison — it now
+  says "Same map, same room, same settings — one take with the EQ on, one with it off."
 - **Design direction unchanged:** hardware-faceplate / spec-sheet aesthetic — near-black violet ground, violet→pink accent, mono type for every number, matches the app itself.
 - **Sections (in order):** sticky nav → hero with live SVG frequency-response curve (real PUBG preset data) → spec table → **interactive demo** (see below) → side-by-side EQ-off/EQ-on video comparison → download cards → footer.
 - **Demo section is now interactive:** `src/components/Demo.astro` — clicking a preset chip (Flat/FPS/PUBG/RPG/Cinematic/Music) updates the title, the 10 slider bars/gain labels, and the 20-bar spectrum display, all driven by the real gain arrays copied from `GamingEqualizer/Presets/*.json`. The 20-bar spectrum is derived by interpolating the 10 band values (same idea as the app's own 10→80 visualizer) plus a small fixed jitter array so it reads as organic rather than a stair-step; formula is `42% baseline + 10%/dB`, deliberately exaggerated beyond the literal slider scale so the shape change between presets is obvious rather than subtle. The 10-band sliders themselves use the app's literal scale (`|gain|×6px` over a 46px, `overflow-hidden` track — clipping was added after taller bars like +7 initially poked up into the gain label above them).
