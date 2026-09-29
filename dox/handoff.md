@@ -43,8 +43,34 @@ weeks.
    install, which is the damage being prevented**, so it is deliberately
    untested. It ships with whatever version comes next; 3.0.4's installer still
    has the bug.
-3. **`BypassAndQuit` swallows a failed bypass** — quitting can leave the EQ applied.
-4. **Microphone EQ** — deferred by choice; the `Device:`-scoping blocker is gone.
+3. ~~**`BypassAndQuit` swallows a failed bypass**~~ **Fixed 2026-09-29 (`cb90407`),
+   unreleased.** A thrown bypass failure is now logged, the window restored, and
+   the user asked "Quit anyway?" before exit; declining keeps the app open with
+   the error banner. Re-entrancy guarded, since the native tray menu is not
+   blocked by an Avalonia modal. Build-verified; **the prompt has not been seen
+   live** — forcing it means making every write path fail at once. **It covers
+   less than it sounds like**, for the reason in item 4.
+4. **The config-write fallback is inert, and it hides failures.** When
+   `config.txt` cannot be written, `EQConfigWriter.WriteWithFallback` writes the
+   config to `%AppData%\...\eq_config.txt` and an `Include:` line pointing at it
+   into `geq_include.txt` — **but nothing ever makes `config.txt` include
+   `geq_include.txt`**, so EqualizerAPO never reads either file. Worse, the
+   fallback reports success, so `Apply()` and `Bypass()` return normally: every
+   EQ change silently does nothing, and a failed bypass on quit still exits
+   silently with the old EQ applied — item 3's prompt never fires, because
+   nothing throws. The fallback cannot be repaired as designed: the only way to
+   make EqualizerAPO read another file is an `Include:` in `config.txt`, which
+   is the file that just failed to write. It dates from the pre-elevation design
+   (see "Critical Design Decisions") and has been vestigial since
+   `requireAdministrator`. **Likely fix: delete the fallback and throw when the
+   primary write fails**, which lets `SafeBypass`, item 3's prompt, and every
+   apply path's error banner actually fire. A design decision, so not done
+   unasked.
+5. **Microphone EQ** — deferred by choice; the `Device:`-scoping blocker is gone.
+6. **macOS/Linux `Bypass()` swallows its own failures** (`LinuxEQBackend`,
+   `MacEQBackend` catch and log internally), so item 3's prompt can never fire
+   there either. Lower priority than it sounds — neither platform has run on real
+   hardware yet.
 
 **The README is no longer a stub.** It now carries the layout, the build, and
 the full release runbook including the two staging steps that have bitten every
