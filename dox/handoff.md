@@ -33,11 +33,16 @@ weeks.
 1. **macOS/Linux are stranded on 3.0.0** — now five releases behind, still
    pre-rebrand, still never run on real hardware. Still the largest real gap.
    **v3.0.0 must not be deleted**; the site's Mac/Linux cards point at its assets.
-2. **The installer's silent-install path reinstalls EqualizerAPO.** The
-   "already installed" check lives in `EqualizerAPOPage`, and NSIS skips
-   `Page custom` functions under `/S`, so `$EqApoInstalled` stays empty and the
-   download runs. Move the `ReadRegStr` into the section itself. Harmless for
-   anyone clicking through normally.
+2. ~~**The installer's silent-install path reinstalls EqualizerAPO.**~~
+   **Fixed 2026-09-29 (`538a2b0`), unreleased.** The "already installed" check
+   lived in `EqualizerAPOPage` and stored its answer in `$EqApoInstalled`;
+   NSIS skips `Page custom` functions under `/S`, so the section saw an unset
+   flag and reinstalled over a working APO. The section now reads the registry
+   itself and the page keeps a check only to decide whether to display.
+   Compile-verified only — **exercising it means a real `/S` run over a working
+   install, which is the damage being prevented**, so it is deliberately
+   untested. It ships with whatever version comes next; 3.0.4's installer still
+   has the bug.
 3. **`BypassAndQuit` swallows a failed bypass** — quitting can leave the EQ applied.
 4. **Microphone EQ** — deferred by choice; the `Device:`-scoping blocker is gone.
 
