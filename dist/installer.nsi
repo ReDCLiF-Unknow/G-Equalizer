@@ -57,16 +57,14 @@ Page custom EqualizerAPOPage
 
 ; ── Custom page: EqualizerAPO notice ─────────────────────────────────────────
 
-Var EqApoInstalled
-
 Function EqualizerAPOPage
-    ; Check if EqualizerAPO is already installed
+    ; This only decides whether to show the page. Whether to *install* is
+    ; decided again in the section below — NSIS does not run `Page custom`
+    ; functions under /S, so nothing set here survives a silent install.
     ReadRegStr $0 HKLM "${EQAPO_REG}" "InstallPath"
     ${If} $0 != ""
-        StrCpy $EqApoInstalled "1"
         Abort   ; skip the page — already installed
     ${EndIf}
-    StrCpy $EqApoInstalled "0"
 
     nsDialogs::Create 1018
     Pop $0
@@ -88,7 +86,12 @@ FunctionEnd
 
 Section "EqualizerAPO" SEC_EQAPO
 
-    ${If} $EqApoInstalled == "1"
+    ; Read the registry here rather than carrying a flag over from the page.
+    ; `Page custom` functions are skipped on a silent install, so a /S run
+    ; would otherwise see an unset flag and reinstall EqualizerAPO on top of
+    ; a working one — detaching it from the user's playback device.
+    ReadRegStr $0 HKLM "${EQAPO_REG}" "InstallPath"
+    ${If} $0 != ""
         DetailPrint "EqualizerAPO already installed — skipping."
         Goto done
     ${EndIf}
