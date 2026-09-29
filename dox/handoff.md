@@ -47,25 +47,31 @@ weeks.
    unreleased.** A thrown bypass failure is now logged, the window restored, and
    the user asked "Quit anyway?" before exit; declining keeps the app open with
    the error banner. Re-entrancy guarded, since the native tray menu is not
-   blocked by an Avalonia modal. Build-verified; **the prompt has not been seen
-   live** — forcing it means making every write path fail at once. **It covers
-   less than it sounds like**, for the reason in item 4.
-4. **The config-write fallback is inert, and it hides failures.** When
-   `config.txt` cannot be written, `EQConfigWriter.WriteWithFallback` writes the
-   config to `%AppData%\...\eq_config.txt` and an `Include:` line pointing at it
-   into `geq_include.txt` — **but nothing ever makes `config.txt` include
-   `geq_include.txt`**, so EqualizerAPO never reads either file. Worse, the
-   fallback reports success, so `Apply()` and `Bypass()` return normally: every
-   EQ change silently does nothing, and a failed bypass on quit still exits
-   silently with the old EQ applied — item 3's prompt never fires, because
-   nothing throws. The fallback cannot be repaired as designed: the only way to
-   make EqualizerAPO read another file is an `Include:` in `config.txt`, which
-   is the file that just failed to write. It dates from the pre-elevation design
-   (see "Critical Design Decisions") and has been vestigial since
-   `requireAdministrator`. **Likely fix: delete the fallback and throw when the
-   primary write fails**, which lets `SafeBypass`, item 3's prompt, and every
-   apply path's error banner actually fire. A design decision, so not done
-   unasked.
+   blocked by an Avalonia modal. Build-verified; **the prompt itself has not been
+   seen on screen** — driving the tray needs a human (UIPI). As of item 4's fix
+   it now fires whenever config.txt cannot be written, not just in the rare case
+   where every path failed.
+4. ~~**The config-write fallback is inert, and it hides failures.**~~ **Fixed
+   2026-09-29 (`ebd6ca4`) by deleting it, unreleased.** When `config.txt` could
+   not be written, the writer put the config in `%AppData%\...\eq_config.txt` and
+   an `Include:` for it in `geq_include.txt` — but nothing ever made `config.txt`
+   include `geq_include.txt`, and nothing could have, since `config.txt` was the
+   file that had just failed. Because EqualizerAPO's installer grants
+   `BUILTIN\Users` full control of its config directory, those fallback writes
+   *succeeded*, so the writer reported success: every apply and bypass silently
+   did nothing and no caller's error handling ever ran. A failed write to
+   `config.txt` now throws (after the existing 200 ms retry), carrying the real
+   cause. All four call sites were already wrapped — `ApplyCurrentGains` and
+   `SafeBypass` show the banner, `BypassAndQuit` shows its prompt — so nothing can
+   crash; they just finally receive the failures they were written for.
+   **Verified against the real writer** in a console harness that links
+   `EQConfigWriter.cs`, with `config.txt` held open read-share (readers allowed so
+   EqualizerAPO is unaffected, writers blocked): throws after 231 ms, logs both
+   attempts, creates no fallback files; released, the write succeeds;
+   `config.txt` byte-identical before and after. That lock technique is a clean,
+   safe way to exercise write-failure paths again. Stale `geq_include.txt` /
+   `eq_config.txt` from older versions are harmless — EqualizerAPO never read
+   them — so they are not cleaned up.
 5. **Microphone EQ** — deferred by choice; the `Device:`-scoping blocker is gone.
 6. **macOS/Linux `Bypass()` swallows its own failures** (`LinuxEQBackend`,
    `MacEQBackend` catch and log internally), so item 3's prompt can never fire
@@ -772,7 +778,7 @@ Scheduler. If elevation is ever dropped, a plain Run value would work again and
 
 ## Critical Design Decisions
 
-- **UAC:** App manifest uses `requireAdministrator` so it can write to the EqualizerAPO config directory. Fallback: write to a user-writable path and chain via EqualizerAPO `Include` directive.
+- **UAC:** App manifest uses `requireAdministrator` so it can write to the EqualizerAPO config directory. *(The old "fallback: write to a user-writable path and chain via `Include`" was removed on 2026-09-29 — it could never take effect; see "Start here" item 4.)* **Worth questioning:** on this machine EqualizerAPO's installer granted `BUILTIN\Users:(OI)(CI)(F)` on `C:\Program Files\EqualizerAPO\config`, and an unelevated process wrote `config.txt` fine. If that ACL is standard, elevation may not be needed for the EQ at all — and it is the root of the UAC prompt on every launch, UIPI blocking automated UI testing, and autostart having to go through Task Scheduler. Not verified as standard across EqualizerAPO versions or install options, and the logon task itself needs elevation to create, so this is a lead to investigate, not a change to make blind.
 - **EQ filter spec:** Peaking EQ, Q = 1.41, ±12 dB range per band.
 - **Per-ear calibration:** Each ear tested separately (7 frequencies × 2 ears = 14 steps). Signal is panned hard left/right via `PanningSampleProvider(monoSignalGenerator)`. Results stored as `LastCalibrationLeft[10]` + `LastCalibrationRight[10]`. Average stored in `LastCalibration[10]` for slider display. `EQConfigWriter.ApplyPerEar` writes `Channel: L` / `Channel: R` / `Channel: ALL` blocks. When the user subsequently switches presets, `BlendWithPreset` adds the per-ear deviation `(calSide[i] - calAvg[i])` on top of the preset gains — so calibration persists as a transparent hearing-correction layer across preset changes.
 - **Onboarding:** `AppSettings.HasCompletedOnboarding` (default `false`). `App.xaml.cs` shows `OnboardingWizard` after `MainWindow` is shown on first run. If the user opts in to calibration on the final step, `MainWindow.OpenCalibrationWizard()` is called immediately after.
