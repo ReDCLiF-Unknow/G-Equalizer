@@ -1204,9 +1204,42 @@ public partial class MainWindow : Window
         catch (Exception ex) { ShowErrorBanner($"Failed to bypass EQ: {ex.Message}"); }
     }
 
-    public void BypassAndQuit()
+    // Guards against a second tray Quit while the failure prompt is open — the tray
+    // menu is native, so an Avalonia modal does not block it.
+    private bool _quitInProgress;
+
+    public async Task BypassAndQuit()
     {
-        try { _backend.Bypass(); } catch { }
+        if (_quitInProgress) return;
+        _quitInProgress = true;
+
+        try
+        {
+            _backend.Bypass();
+        }
+        catch (Exception ex)
+        {
+            // EqualizerAPO keeps applying config.txt whether or not G-EQ is running, so a
+            // failed bypass here outlives the app: the user's audio stays altered with
+            // nothing left running to explain it. Say so before exiting, not after.
+            Logger.Log($"BypassAndQuit: bypass failed, EQ stays applied after exit: {ex.Message}");
+
+            RestoreFromTray();   // a tray quit usually has the window hidden, and the prompt needs an owner
+            bool quitAnyway = await MsgBox.Confirm(
+                "G-EQ couldn't switch the EQ off, so it will stay applied to your audio " +
+                "after G-EQ closes.\n\n" +
+                $"{ex.Message}\n\n" +
+                "Quit anyway?",
+                "EQ still active", this);
+
+            if (!quitAnyway)
+            {
+                ShowErrorBanner($"Failed to bypass EQ: {ex.Message}");
+                _quitInProgress = false;
+                return;
+            }
+        }
+
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime lt)
             lt.Shutdown();
     }
