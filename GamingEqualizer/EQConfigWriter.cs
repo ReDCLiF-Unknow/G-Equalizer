@@ -22,13 +22,6 @@ public class EQConfigWriter
     private static readonly string EqApoDir = @"C:\Program Files\EqualizerAPO\config";
     private static readonly string ConfigPath = Path.Combine(EqApoDir, "config.txt");
 
-    // Fallback path if Program Files write fails despite UAC
-    private static readonly string FallbackDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "GamingEqualizer");
-    private static readonly string FallbackConfigPath = Path.Combine(FallbackDir, "eq_config.txt");
-    private static readonly string FallbackIncludePath = Path.Combine(EqApoDir, "geq_include.txt");
-
     private static readonly int[] BandFrequencies = { 32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
 
     public static bool IsEqualizerApoInstalled() => Directory.Exists(@"C:\Program Files\EqualizerAPO\");
@@ -36,19 +29,19 @@ public class EQConfigWriter
     public void Apply(float[] bands, float boostDb = 0f)
     {
         var lines = BuildConfig(bands, boostDb);
-        WriteWithFallback(lines);
+        Write(lines);
     }
 
     public void ApplyPerEar(float[] leftBands, float[] rightBands, float boostDb = 0f)
     {
         var lines = BuildPerEarConfig(leftBands, rightBands, boostDb);
-        WriteWithFallback(lines);
+        Write(lines);
     }
 
     public void Bypass()
     {
         var lines = new[] { "Preamp: 0 dB" };
-        WriteWithFallback(lines);
+        Write(lines);
     }
 
     private string[] BuildPerEarConfig(float[] left, float[] right, float boostDb = 0f)
@@ -220,50 +213,44 @@ public class EQConfigWriter
         return string.Join(' ', pattern.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private void WriteWithFallback(string[] lines)
+    /// <summary>
+    /// Writes config.txt, retrying once, and throws if it cannot.
+    ///
+    /// There is deliberately no fallback. There used to be one: write the config to
+    /// %AppData% and drop an Include file beside config.txt. But EqualizerAPO reads only
+    /// config.txt and what config.txt itself includes, and nothing ever added that Include —
+    /// it could not have, since writing config.txt is exactly what had just failed. The
+    /// fallback reported success regardless, so every apply and bypass silently did nothing
+    /// and none of the callers' error handling ever ran. If config.txt cannot be written the
+    /// EQ has not changed, and the caller needs to know.
+    /// </summary>
+    private void Write(string[] lines)
     {
-        if (TryWrite(ConfigPath, lines))
+        if (TryWrite(lines, out _))
             return;
 
-        // Retry once after 200ms
+        // Retry once after 200ms — a transient lock (an editor, an AV scan) usually clears
         Thread.Sleep(200);
-        if (TryWrite(ConfigPath, lines))
+        if (TryWrite(lines, out var error))
             return;
 
-        // Fallback: write to user-writable path, chain via Include
-        TryWriteFallback(lines);
+        throw new InvalidOperationException($"Could not write config.txt: {error!.Message}", error);
     }
 
-    private bool TryWrite(string path, string[] lines)
+    private bool TryWrite(string[] lines, out Exception? error)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllLines(path, lines);
+            Directory.CreateDirectory(EqApoDir);
+            File.WriteAllLines(ConfigPath, lines);
+            error = null;
             return true;
         }
         catch (Exception ex)
         {
-            Logger.Log($"Config write failed ({path}): {ex.Message}");
+            Logger.Log($"Config write failed ({ConfigPath}): {ex.Message}");
+            error = ex;
             return false;
-        }
-    }
-
-    private void TryWriteFallback(string[] lines)
-    {
-        try
-        {
-            Directory.CreateDirectory(FallbackDir);
-            File.WriteAllLines(FallbackConfigPath, lines);
-
-            // Write an Include directive into the EqualizerAPO config dir
-            File.WriteAllText(FallbackIncludePath, $"Include: {FallbackConfigPath}");
-            Logger.Log("Used fallback Include directive path.");
-        }
-        catch (Exception ex)
-        {
-            Logger.Log($"Fallback config write also failed: {ex.Message}");
-            throw new InvalidOperationException("Cannot write EQ config. Check EqualizerAPO installation and permissions.", ex);
         }
     }
 }
