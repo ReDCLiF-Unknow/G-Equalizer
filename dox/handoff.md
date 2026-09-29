@@ -1,6 +1,54 @@
 # G-EQ — Handoff Document
 
-## ⏭️ Start here (2026-08-30)
+## ⏭️ Start here (2026-09-29)
+
+**3.0.4 is shipped.** Tagged `v3.0.4` (at `4ce440d`), released with
+`G-EQ-Setup-3.0.4.exe` attached, and the website is live again at
+https://redclif-unknow.github.io/G-Equalizer/ serving the new version. The
+thirteen commits that had been sitting unreleased since 3.0.3 — the mic-EQ
+device scoping, the invariant-culture number format, the spectrum-scaling fix
+that makes LIVE render at all — are finally in a build the public can download.
+**The item that led this document for six weeks is closed.**
+
+**The repo had gone private, and that had silently taken the entire
+distribution channel down.** GitHub Pages is unavailable on private repos on
+the free plan, so the live site was returning **404** and release assets were
+not publicly downloadable — for an unknown stretch of time. Nothing in this
+document recorded it; the only trace anywhere was a single line in a README
+that was itself uncommitted. It is public again and Pages is re-enabled with
+`build_type=workflow`. **If the site 404s again, check repo visibility before
+anything else** — the symptom looks like a deploy failure and is not one.
+Note `gh` here is 2.45.0, which predates `--accept-visibility-change-consequences`;
+plain `gh repo edit --visibility public` is the working form.
+
+**The website copy is now accurate for the first time in a while:** Specs says
+seven built-in presets (Bass Boost included) and describes the contour wave,
+BEAT's nine bands and the four colour modes. It had been stale in both
+directions at once — advertising a visualizer that rendered blank in the
+shipped build, while not mentioning features that had existed in code for
+weeks.
+
+**What is actually next, none of it urgent:**
+
+1. **macOS/Linux are stranded on 3.0.0** — now five releases behind, still
+   pre-rebrand, still never run on real hardware. Still the largest real gap.
+   **v3.0.0 must not be deleted**; the site's Mac/Linux cards point at its assets.
+2. **The installer's silent-install path reinstalls EqualizerAPO.** The
+   "already installed" check lives in `EqualizerAPOPage`, and NSIS skips
+   `Page custom` functions under `/S`, so `$EqApoInstalled` stays empty and the
+   download runs. Move the `ReadRegStr` into the section itself. Harmless for
+   anyone clicking through normally.
+3. **`BypassAndQuit` swallows a failed bypass** — quitting can leave the EQ applied.
+4. **Microphone EQ** — deferred by choice; the `Device:`-scoping blocker is gone.
+
+**The README is no longer a stub.** It now carries the layout, the build, and
+the full release runbook including the two staging steps that have bitten every
+release (the `app-icon.ico` copy `makensis` needs, and quitting from the tray
+before rebuilding). Prefer it over re-deriving those from this document.
+
+---
+
+## Start here (2026-08-30)
 
 **Cut 3.0.4. It is the highest-value thing left, and the website now depends on it.**
 Fourteen code commits sit on `main` ahead of the published 3.0.3, including two fixes that change
@@ -598,15 +646,15 @@ All in `dist/`:
 
 | File | Size | Notes |
 |---|---|---|
-| `G-EQ-Setup-3.0.3.exe` | 31.4 MB | **Current.** Windows — all-in-one NSIS installer. Built 2026-08-15 from `1fdbc0e`; exe reports `3.0.3+2e6f22b`. Its uninstaller deletes the logon task; earlier ones do not. |
-| `G-EQ-Setup-3.0.2.exe` / `3.0.1` / `3.0.0` | ~31 MB each | Superseded. **Do not delete 3.0.0** — the website's macOS/Linux cards point at the v3.0.0 release assets. |
+| `G-EQ-Setup-3.0.4.exe` | 31.4 MB | **Current.** Windows — all-in-one NSIS installer. Built 2026-09-09 from `9835380`; exe reports `3.0.4+2361f9c`. Released as `v3.0.4` and linked from the website. |
+| `G-EQ-Setup-3.0.3.exe` / `3.0.2` / `3.0.1` / `3.0.0` | ~31 MB each | Superseded. **Do not delete 3.0.0** — the website's macOS/Linux cards point at the v3.0.0 release assets. |
 | `app/` | — | Publish staging dir, **gitignored**. Recreated by the publish command below. |
 | `GEqualizer-macOS-arm64-3.0.0.zip` | ~41 MB | macOS Apple Silicon — `.app` bundle (zip). Unzip, right-click → Open to bypass Gatekeeper. `.icns` icon and `.dmg` need to be generated on macOS. |
 | `GEqualizer-macOS-x64-3.0.0.zip` | ~43 MB | macOS Intel — same as above |
 | `GEqualizer-linux-x64-3.0.0.tar.gz` | ~40 MB | Linux x64 — tar.gz. Extract and run `./GEqualizer-linux/GamingEqualizer`. `.AppImage` packaging needs Linux tools. |
 | `installer.nsi` | — | NSIS source; rebuild with `& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi` |
 
-**macOS and Linux are now four releases behind** (3.0.0 vs 3.0.3), still pre-rebrand, still never
+**macOS and Linux are now five releases behind** (3.0.0 vs 3.0.4), still pre-rebrand, still never
 run on real hardware. Of this cycle's fixes, the `--minimized` initialisation fix and the UI fixes
 (clickable captions, hotkey rebinding, the hint text) are cross-platform and apply to them; the
 scheduled-task autostart is Windows-only — `StartupTask` is guarded by `OperatingSystem.IsWindows()`
@@ -639,10 +687,10 @@ Then rebuild installer from `dist/`:
 |---|---|
 | BEAT fired twice per sound — once on real onset, once on an abrupt stop's spectral-leakage click | Fixed (`f4af92a`): one-frame candidate hold + `BeatClickRejectFloor`. Verified clean (quiet endpoint confirmed first): silence/tone hold at zero, the click is actively rejected. Caveat: a pure-tone percussion proxy can look like a false rejection — use broadband noise when testing this, see "Start here" |
 | Nine beat bands with a tinted interleave, added by request | Fixed (`f4af92a`). Negative controls clean across all nine bands; tint confirmed live (zoomed screenshot shows the alternating muted/full-colour pattern) |
-| **Fourteen code changes are unreleased** (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`, `4fae6d0`, `b34a77b`, plus the visualizer fix) — including the mic-EQ scoping and the locale/decimal fix, which are part of why the EQ is audible at all, and the repair that makes the LIVE visualizer render anything. The published 3.0.3 has none of them, and the website advertises the broken visualizer | **Open, and the highest-value item.** Version bump, publish, `makensis`, tag, release |
+| Thirteen code changes sat unreleased on `main` (`06ada69`, `3c920ba`, `82efc1b`, `17cd91b`, `dcef541`, `3a77e0f`, `f4af92a`, `89345cf`, `d944e1a`, `a325dc2`, `5c7ad4d`, `4fae6d0`, `b34a77b`) — the mic-EQ scoping, the locale/decimal fix, and the repair that makes the LIVE visualizer render | **Fixed — shipped in 3.0.4** (2026-09-29). Tagged `v3.0.4` at `4ce440d`, released with `G-EQ-Setup-3.0.4.exe` attached, website updated and deployed. Earlier notes said "fourteen"; that double-counted `82efc1b` |
 | BEAT mode and LIVE mode had never been seen running in the app, only validated offline | Fixed — confirmed live 2026-08-24 via screenshots of the running process (five independent peaks against a kick+hihat mix, BEAT auto-restoring on a fresh launch). Not yet tried against real Spotify playback specifically, only synthetic test signals |
 | The playback EQ was applied to every device EqualizerAPO is attached to, microphones included | Fixed (`d944e1a`) — `Device:` scoping verified on hardware against both endpoints of the same headset. This also unblocks mic EQ, since `Device:`-scoped sections were the missing piece: see "Microphone EQ" below |
-| **macOS/Linux are four releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
+| **macOS/Linux are five releases behind** on 3.0.0 — they miss the cross-platform half of these fixes | **Open.** Cross-publish + repackage; still never verified on real hardware |
 | Node could not build the website (Astro needs ≥22.12.0) | Fixed — the machine now has **Node v22.23.2**, and the site builds and previews locally. One gotcha: `node_modules` still held Node 20 native bindings, so `astro build` died on a missing `rolldown-binding.win32-x64-msvc.node` until `npm ci` reinstalled them. **ffmpeg is also installed now** (`winget install Gyan.FFmpeg`), so video work needs no setup |
 | `ResetAccent_Click` toggled `_suppressSettings` with no `try`/`finally` | Fixed (`89345cf`) — a throw there would have silently deadened the whole Settings panel until restart, the same shape as the `PopulateSettingsPanel` bug |
 | Auto-preset switching ended in a bare `catch { }` | Fixed (`89345cf`) — now logged, deliberately not banner'd, since it ticks every 2 s. **Still open:** `BypassAndQuit` swallows a failed bypass (quitting can leave the EQ applied), and APO health is only checked in `OnOpened` so a mid-session detach goes unreported |
